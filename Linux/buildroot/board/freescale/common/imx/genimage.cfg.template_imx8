@@ -1,0 +1,108 @@
+# Minimal SD card image for the Freescale iMX8 boards
+#
+# We mimic the .sdcard Freescale's image format:
+# * the SD card must have 33 kB free space at the beginning,
+# * U-Boot is integrated into imx8-boot-sd.bin and is dumped as is,
+# * a FAT partition at offset 8MB is containing Image and DTB files
+# * a single root filesystem partition is required (ext2, ext3 or ext4)
+#
+
+
+#image emmc.boot.part0 {
+#  hdimage {
+#  }
+
+#  partition imx-boot {
+#    in-partition-table = "no"
+#    image = "imx8-boot-sd.bin"
+#    offset = %IMXOFFSET%
+#  }
+#}
+
+image emmc.img{
+  size = 14G
+  hdimage {
+	gpt = "true"
+	gpt-location = 7M
+	disk-uuid = 731893da-bdf1-11eb-8c33-cb904bddb579
+	gpt-no-backup = "true"
+  }
+
+  partition imx-boot {
+    in-partition-table = "no"
+    image = "imx8-boot-sd.bin"
+    offset = %IMXOFFSET%
+  }
+
+#  partition uboot-env1 {
+#	in-partition-table = "no"
+#	offset = 4M
+#	size = 1M
+#  }
+
+#  partition uboot-env2 {
+#	in-partition-table = "no"
+#	offset = 5M
+#	size = 1M
+#  }
+
+  partition rootfs {
+	partition-type-uuid = 0fc63daf-8483-4772-8e79-3d69d8477de4
+	partition-uuid = 62cc7d66-bdec-11eb-b979-7f6ef51fdc2a
+	offset = 8M
+	size = %BR2_TARGET_ROOTFS_EXT2_SIZE%
+  }
+
+  partition usr {
+	partition-type-uuid = 0fc63daf-8483-4772-8e79-3d69d8477de4
+	partition-uuid = 70bac298-bdec-11eb-8dd6-6330df167a58
+	autoresize = "true"
+  }
+}
+
+
+image boot.vfat {
+  vfat {
+    label = "boot"
+    files = {
+      emmc.img,
+	  rootfs.ext4.gz,
+    }
+  }
+  size = 512M
+}
+
+image sdcard_burn_emmc.img{
+  hdimage {
+  }
+
+  partition imx-boot {
+    in-partition-table = "no"
+    image = "imx8-boot-sd.bin"
+    offset = %IMXOFFSET%
+  }
+
+  partition boot {
+    partition-type = 0xC
+    bootable = "true"
+    image = "boot.vfat"
+    offset = 8M
+  }
+}
+
+image sdcard.img {
+  hdimage {
+  }
+
+  partition imx-boot {
+    in-partition-table = "no"
+    image = "imx8-boot-sd.bin"
+    offset = %IMXOFFSET%
+  }
+
+  partition rootfs {
+	offset = 8M
+    partition-type = 0x83
+    image = "rootfs.ext2"
+  }
+}

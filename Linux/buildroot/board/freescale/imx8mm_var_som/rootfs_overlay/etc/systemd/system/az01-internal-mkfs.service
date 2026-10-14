@@ -1,0 +1,12 @@
+[Unit]
+Description=Create /media/az01-internal filesystem if necessary
+DefaultDependencies=no
+Conflicts=shutdown.target
+Requires=dev-disk-by\x2dpartuuid-70bac298\x2dbdec\x2d11eb\x2d8dd6\x2d6330df167a58.device
+After=dev-disk-by\x2dpartuuid-70bac298\x2dbdec\x2d11eb\x2d8dd6\x2d6330df167a58.device
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/az01-internal-mkfs

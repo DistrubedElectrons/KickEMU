@@ -1,0 +1,12 @@
+[Unit]
+Description=Mount /media/az01-internal
+DefaultDependencies=no
+Requires=az01-internal-mkfs.service
+RequiresMountsFor=/media
+Conflicts=umount.target
+After=az01-internal-mkfs.service
+Before=local-fs.target umount.target
+
+[Mount]
+What=PARTUUID=70bac298-bdec-11eb-8dd6-6330df167a58
+Where=/media/az01-internal

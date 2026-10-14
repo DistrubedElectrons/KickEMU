@@ -1,0 +1,14 @@
+#!/bin/sh
+
+device=/dev/disk/by-partuuid/70bac298-bdec-11eb-8dd6-6330df167a58
+
+/sbin/e2label "$device" >/dev/null
+ret=$?
+
+if test $ret = 1
+then
+    mkfs.ext4 -L az01-internal "$device"
+    ret=$?
+fi
+
+exit $ret
