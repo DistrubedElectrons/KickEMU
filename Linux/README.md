@@ -1,9 +1,6 @@
 # Kick Linux (Buildroot)
 
-Buildroot tree for the Linux image of Kick, an unfinished MPC-style groove box on a
-Variscite DART-MX8M-MINI (NXP i.MX8M Mini). The application itself lives in the separate Kick repository.
-
-**Status:** development has stopped and the project is published as-is. It is not maintained.
+Buildroot tree for the BE 0700-AAM Linux image (Variscite DART-MX8M-MINI, NXP i.MX8M Mini).
 
 ## Building
 

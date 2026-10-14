@@ -1,11 +1,9 @@
 # AudIO
 
-AudIO is the audio engine library behind Kick. It is a patchable graph of audio objects (oscillators,
+AudIO is the audio engine library used by Kick. It is a patchable graph of audio objects (oscillators,
 ADSR, mixer, playback and recorder, SoundFont synth, more than 300 Airwindows effects) with buses,
 chains and a small DAW layer. It can be used as a JUCE module (`AudIO/AudIO.h`) or on its own through
 CMake. See `AudIO/Example/` for usage.
-
-**Status:** development has stopped and the project is published as-is. It is not maintained.
 
 ## License
 

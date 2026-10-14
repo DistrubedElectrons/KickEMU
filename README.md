@@ -1,18 +1,14 @@
-# BE 0700-AAM (Kick)
+# BE 0700-AAM
 
-Source code of **Kick**, an MPC-style groove box / sampler that was not finished. It ran on an NXP i.MX8M Mini
-(Variscite DART-MX8M-MINI) with a Buildroot Linux image and a JUCE-based application.
-
-**Status:** development has stopped and the code is published as-is. It is not maintained.
+Source code for the BE 0700-AAM, based on the NXP i.MX8M Mini (Variscite DART-MX8M-MINI).
 
 | Folder | Contents | License |
 |---|---|---|
-| [`Kick/`](Kick) | The application (UI, sequencer, sampler, hardware control) | AGPL-3.0-or-later |
-| [`AudIO/`](AudIO) | Audio engine library used by Kick | AGPL-3.0-or-later |
-| [`ComProtocol/`](ComProtocol) | Packet protocol between the application and the device hardware | AGPL-3.0-or-later |
-| [`Linux/`](Linux) | Buildroot tree for the device's Linux image | GPL-2.0 (Buildroot) |
+| [`Kick/`](Kick) | Application | AGPL-3.0-or-later |
+| [`AudIO/`](AudIO) | Audio engine library | AGPL-3.0-or-later |
+| [`ComProtocol/`](ComProtocol) | Hardware communication protocol | AGPL-3.0-or-later |
+| [`Linux/`](Linux) | Buildroot Linux image | GPL-2.0 (Buildroot) |
 
-Each folder has its own README covering build notes, removed material and bundled third-party code.
-Third-party components keep their original licenses.
+Third-party components keep their original licenses. See the README in each folder.
 
 Copyright (c) MUSIC Tribe.
