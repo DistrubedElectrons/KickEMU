@@ -1,6 +1,31 @@
-# BE 0700-AAM
+<p align="center">
+  <img src="docs/images/social-preview.png" alt="Behringer KICK (BE 0700-AAM)" width="100%">
+</p>
 
-Source code for the BE 0700-AAM, based on the NXP i.MX8M Mini (Variscite DART-MX8M-MINI).
+# Behringer KICK (BE 0700-AAM)
+
+Source code for the Behringer KICK, based on the NXP i.MX8M Mini (Variscite DART-MX8M-MINI).
+
+<p align="center">
+  <img src="docs/images/front.png" alt="KICK front panel" width="560">
+</p>
+
+## Connections
+
+<p align="center">
+  <img src="docs/images/rear.png" alt="KICK rear panel" width="100%">
+</p>
+
+| Rear | Front |
+|---|---|
+| 12 V DC power input, power switch | SD card slot |
+| LINK (RJ45) | Headphones output |
+| USB-C, USB-A | |
+| MIDI IN, MIDI OUT (5-pin DIN) | |
+| Stereo output, stereo input | |
+| CV / Gate (4 jacks) | |
+
+## Repository
 
 | Folder | Contents | License |
 |---|---|---|
@@ -10,5 +35,18 @@ Source code for the BE 0700-AAM, based on the NXP i.MX8M Mini (Variscite DART-MX
 | [`Linux/`](Linux) | Buildroot Linux image | GPL-2.0 (Buildroot) |
 
 Third-party components keep their original licenses. See the README in each folder.
+
+<details>
+<summary>All views</summary>
+
+<p align="center">
+  <img src="docs/images/views.png" alt="KICK top, front, side and rear views" width="100%">
+</p>
+</details>
+
+---
+
+Behringer is a brand of MUSIC Tribe. The Behringer name and logo, and the KICK name and logo, are
+trademarks and are not covered by the software licenses in this repository.
 
 Copyright (c) MUSIC Tribe.
