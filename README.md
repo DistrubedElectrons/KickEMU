@@ -9,6 +9,7 @@ Source code for the BE 0700-AAM, based on the NXP i.MX8M Mini (Variscite DART-MX
 | [`ComProtocol/`](ComProtocol) | Hardware communication protocol | AGPL-3.0-or-later |
 | [`Linux/`](Linux) | Buildroot Linux image | GPL-2.0 (Buildroot) |
 
+The root [`LICENSE`](LICENSE) is the AGPL-3.0 text that covers the Music Tribe code (Kick, AudIO, ComProtocol).
 Third-party components keep their original licenses. See the README in each folder.
 
 Copyright (c) MUSIC Tribe.
