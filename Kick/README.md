@@ -1,10 +1,6 @@
 # Kick
 
-Kick is the application software for an unfinished MPC-style groove box / sampler built on an
-NXP i.MX8M Mini (Variscite DART-MX8M-MINI) running a Buildroot Linux image. It is written in C++
-with [JUCE](https://juce.com).
-
-**Status:** development has stopped and the project is published as-is. It is not maintained.
+Application software for the BE 0700-AAM, written in C++ with [JUCE](https://juce.com).
 
 ## License
 
