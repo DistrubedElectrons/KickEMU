@@ -37,6 +37,13 @@ Source code for the Behringer KICK, based on the NXP i.MX8M Mini (Variscite DART
 The root [`LICENSE`](LICENSE) is the AGPL-3.0 text that covers the Music Tribe code (Kick, AudIO, ComProtocol).
 Third-party components keep their original licenses. See the README in each folder.
 
+## Community
+
+- **Chat with us:** [Discord](https://discord.gg/gS6qtuShvw)
+- **Contribute:** fork the repository and open a pull request. No membership needed. See the
+  [contributing guide](https://github.com/MusicTribeOpenSource/.github/blob/main/CONTRIBUTING.md).
+- **Report a security problem** privately: [Report a vulnerability](https://github.com/MusicTribeOpenSource/0700-AAM/security/advisories/new).
+
 <details>
 <summary>All views</summary>
 
