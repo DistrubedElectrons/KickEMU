@@ -1,15 +1,14 @@
 [Unit]
-Description=Writable /etc via OverlayFS
+Description=Writable /etc (overlay on the KICK storage partition)
 DefaultDependencies=no
-Requires=overlayfs-setup.service
+Requires=kick-overlay-dirs.service
+After=kick-overlay-dirs.service
 Conflicts=umount.target
-After=overlayfs-setup.service
 Before=local-fs.target umount.target
 
 [Mount]
 What=overlay
 Where=/etc
 Type=overlay
-# NOTE: If you change the paths here, they *must* also change in
-#       /etc/az01/overlayfs.conf.
-Options=lowerdir=/etc,upperdir=/media/az01-internal/system/etc/overlay,workdir=/media/az01-internal/system/etc/.work
+# Paths must match /etc/kick/overlay-dirs.conf
+Options=lowerdir=/etc,upperdir=/media/kickstorage/overlay/etc/upper,workdir=/media/kickstorage/overlay/etc/work

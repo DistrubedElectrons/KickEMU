@@ -24,7 +24,7 @@ image emmc.img{
   hdimage {
 	gpt = "true"
 	gpt-location = 7M
-	disk-uuid = 731893da-bdf1-11eb-8c33-cb904bddb579
+	disk-uuid = 8da16a96-64cb-44ef-9bd7-43cea57d091c
 	gpt-no-backup = "true"
   }
 
@@ -48,14 +48,14 @@ image emmc.img{
 
   partition rootfs {
 	partition-type-uuid = 0fc63daf-8483-4772-8e79-3d69d8477de4
-	partition-uuid = 62cc7d66-bdec-11eb-b979-7f6ef51fdc2a
+	partition-uuid = 70f29e13-761e-461d-8a65-991d765941b7
 	offset = 8M
 	size = %BR2_TARGET_ROOTFS_EXT2_SIZE%
   }
 
   partition usr {
 	partition-type-uuid = 0fc63daf-8483-4772-8e79-3d69d8477de4
-	partition-uuid = 70bac298-bdec-11eb-8dd6-6330df167a58
+	partition-uuid = 56d2e551-db06-46da-bb58-274c6ee725d2
 	autoresize = "true"
   }
 }
