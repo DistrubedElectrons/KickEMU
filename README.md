@@ -4,16 +4,26 @@
 
 # Behringer KICK (BE 0700-AAM)
 
-Source code for the Behringer KICK, based on the NXP i.MX8M Mini (Variscite DART-MX8M-MINI).
+Source code for the Behringer KICK.
 
 <p align="center">
-  <img src="docs/images/front.png" alt="KICK front panel" width="560">
+  <img src="docs/images/kick-front.webp" alt="Behringer KICK" width="720">
 </p>
+
+## Key features
+
+- AI camera for gesture control
+- Touchscreen
+- 16 RGB pads, 8 banks
+- Sampler with sample editing, step sequencer and looper
+- Over 300 built-in effects
+- 4 assignable knobs and a jog wheel
+- MIDI in/out, USB and 4 CV / Gate jacks
 
 ## Connections
 
 <p align="center">
-  <img src="docs/images/rear.png" alt="KICK rear panel" width="100%">
+  <img src="docs/images/kick-rear.webp" alt="Behringer KICK rear panel" width="100%">
 </p>
 
 | Rear | Front |
@@ -45,7 +55,7 @@ Third-party components keep their original licenses. See the README in each fold
 - **Report a security problem** privately: [Report a vulnerability](https://github.com/MusicTribeOpenSource/0700-AAM/security/advisories/new).
 
 <details>
-<summary>All views</summary>
+<summary>Product renders</summary>
 
 <p align="center">
   <img src="docs/images/views.png" alt="KICK top, front, side and rear views" width="100%">
