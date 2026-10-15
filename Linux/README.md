@@ -1,6 +1,6 @@
 # Kick Linux (Buildroot)
 
-Buildroot tree for the BE 0700-AAM Linux image (Variscite DART-MX8M-MINI, NXP i.MX8M Mini).
+Buildroot tree for the BE 0700-AAM Linux image.
 
 ## Building
 

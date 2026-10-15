@@ -4,7 +4,7 @@
 
 # Behringer KICK (BE 0700-AAM)
 
-Source code for the Behringer KICK, based on the NXP i.MX8M Mini (Variscite DART-MX8M-MINI).
+Source code for the Behringer KICK.
 
 <p align="center">
   <img src="docs/images/kick-front.webp" alt="Behringer KICK" width="720">
