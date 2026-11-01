@@ -16,6 +16,9 @@ an interface described here, it updates this file in the same commit.
 
 ## Hardware being emulated
 
+The kernel is varigit `linux-imx` **5.4.127** (the pinned commit). The full enabled-node
+checklist is [board-dt.md](board-dt.md).
+
 Sources: `Linux/buildroot/configs/KTKick_defconfig`, the board files and patches in
 `Linux/buildroot/board/freescale/imx8mm_var_som/`, the Variscite VAR-SOM-MX8M-MINI
 device tree (`imx8mm-var-som.dtsi`, `imx8mm-var-som-symphony.dts` in the varigit kernel),
@@ -27,14 +30,17 @@ the NXP i.MX 8M Mini Reference Manual, and the application code.
 | UART1 to the control-surface MCU, 230400 8N1 | `/dev/ttymxc0` | `Kick/modules/input_events` (PktMgr framing, `ComProtocol/PktMgr`) |
 | UART3, 5-pin DIN MIDI | `/dev/ttymxc2` | `Kick/apps/midiPort` (ttymidi) |
 | UART4, debug console | `/dev/ttymxc3` | SPL, ATF, U-Boot, kernel, getty |
-| 800x480 MIPI-DSI panel via LCDIF + Samsung DSIM | DRM/KMS, Weston | GUI |
+| LCDIF -> Samsung DSIM -> TI SN65DSI84 DSI-to-LVDS bridge (I2C1 0x2c) -> LVDS panel, 1024x600 @ 33 MHz per the bridge timings in the DT | DRM/KMS, Weston | GUI |
 | Goodix GT911 touch, I2C addr 0x14 | evdev multitouch | GUI |
-| NXP PCF85263 RTC, I2C addr 0x68 | `/dev/rtc0` | system |
+| RTC at I2C3 0x68: the part is a PCF85263, but the symphony DTS overrides the patched node with `dallas,ds1337` (rtc-ds1307 driver), so the kernel talks DS1337 registers to it. Model what the driver uses. | `/dev/rtc0` | system |
+| NXP PCA9534 GPIO expander, I2C2 0x20 (gpio-keys, hogs) | gpiochip, input | system |
+| OmniVision OV5640 camera, I2C2 0x3c (MIPI CSI) | V4L2 | camera (later phase) |
 | ROHM BD71847 PMIC (I2C1) | regulators | SPL, kernel |
 | CV/Gate converter on I2C4, addr 0x0c, 8 ch 12-bit DAC/ADC (`0x30\|ch` DAC write, `0x90\|ch` read; exact part to be identified) | `/dev/i2c-3` | `Kick/modules/hardware/source/kick_I2c.cpp` (class `CV`) |
-| SAI2 + SDMA to CoolAudio V4220M (no control bus, `linux,bt-sco` dummy) | ALSA card0, S32_LE 48 kHz | audio engine |
+| SAI2 (clock master, 12.288 MHz MCLK) + SDMA2 (events 2/3) to CoolAudio V4220M (no control bus, `linux,bt-sco` dummy). SDMA RAM firmware is under the NXP EULA, so the driver may run ROM scripts only. | ALSA card0, S32_LE 48 kHz | audio engine |
+| uSDHC1 Wi-Fi SDIO | `mmc0` (5.4 numbers MMC hosts by probe order) | Wi-Fi |
 | uSDHC2 SD card slot | `/dev/mmcblk1` | boot, file browser, update |
-| uSDHC3 eMMC, GPT layout from `genimage.cfg.emmc.partiton.table` | `/dev/mmcblk2` | boot, rootfs, KICK storage |
+| uSDHC3 eMMC, 8-bit, CQHCI (registers at base+0x100), GPT layout from `genimage.cfg.emmc.partiton.table` | `/dev/mmcblk2` | boot, rootfs, KICK storage |
 | ENET (FEC) + PHY, LINK jack | `eth0` | network |
 | SNVS power key | input event, `KEY_STOP`/power | `kick_Hwpref.cpp` |
 | OCOTP fuses, SoC ID | `/sys/devices/soc0/*` | `kick_Hwpref.cpp`, U-Boot |
@@ -78,7 +84,7 @@ IOMUXC/GPR, OCOTP, DDRC + DDR PHY, TMU, SDMA, SAI, LCDIF, MIPI DSIM, BootROM loa
 Unimplemented blocks are mapped as `unimplemented-device` so accesses are logged.
 
 **Board `kick`** (`hw/kick/kick-board.c`): VAR-SOM-MX8M-MINI on the KICK carrier.
-RAM size, eMMC/SD images, PMIC, GT911, PCF85263, the I2C4 0x0c device, ENET PHY,
+RAM size, eMMC/SD images, PMIC, GT911, RTC, PCA9534, SN65DSI84, the I2C4 0x0c device, ENET PHY,
 panel and power key.
 
 **Register accuracy rules:**
@@ -175,7 +181,8 @@ One JSON object per line, UTF-8, `\n` terminated.
 ### Touch conventions
 
 QEMU absolute axes run 0..0x7fff. The GT911 model scales them to its configured panel size
-(default 800x480, as `touchscreen-size-x/y` in the board DT) and reports up to 5 contacts.
+(default 800x480, as `touchscreen-size-x/y` in the board DT, even though the display is
+1024x600; keep both configurable and reproduce the real mapping) and reports up to 5 contacts.
 
 ## Phases
 
