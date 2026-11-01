@@ -14,7 +14,8 @@
 OBJECT_DECLARE_SIMPLE_TYPE(IMX8MMTMUState, IMX8MM_TMU)
 
 #define IMX8MM_TMU_MMIO_SIZE    0x10000
-#define IMX8MM_TMU_NUM_REGS     (0x30 / 4)
+/* Registers 0x00..0x2c plus the calibration/test space up to 0xfff */
+#define IMX8MM_TMU_NUM_REGS     (0x1000 / 4)
 
 struct IMX8MMTMUState {
     SysBusDevice parent_obj;

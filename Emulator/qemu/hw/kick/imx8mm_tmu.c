@@ -14,6 +14,8 @@
  *   0x20 TRITSR   immediate temperature [7:0] in degrees C
  *   0x24 TRATSR   average temperature [7:0]
  *   0x28 TASR, 0x2c TTMC  analog/test configuration
+ *   0x30..0xfff  calibration and test registers (TTCFGR, TSCFGR, TTRnCR,
+ *                written by firmware from fuses), kept as storage
  *
  * The die temperature comes from the "temperature" property (degrees C)
  * and can be changed at run time with qom-set to test thermal handling;
