@@ -35,7 +35,8 @@ Emulator/boot/mkimage-emmc.sh     # eMMC image with the KICK partition layout
 
 See [boot/README.md](boot/README.md) (including the note on the NXP DDR firmware) and
 [testimage/README.md](testimage/README.md). The device tree checklist for the models is
-[docs/board-dt.md](docs/board-dt.md). The host application is added when it lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
+[docs/board-dt.md](docs/board-dt.md); the I2C board devices, SAI and SDMA models are described
+in [docs/devices-i2c-audio.md](docs/devices-i2c-audio.md). The host application is added when it lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
 
 ## Configuration
 
