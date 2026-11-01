@@ -26,6 +26,9 @@ stage_uboot() {
     publish "${UBOOT_SRC}/spl/u-boot-spl.bin"
     publish "${UBOOT_SRC}/$(br BR2_TARGET_UBOOT_FORMAT_CUSTOM_NAME)"
     publish "${UBOOT_SRC}/u-boot.dtb"
+    # U-Boot proper with its DTB appended (u-boot-nodtb.bin + u-boot.dtb),
+    # for boot-mode=uboot at 0x40200000.
+    publish "${UBOOT_SRC}/u-boot.bin"
     # ELF files with symbols, for debugging SPL and U-Boot under the emulator.
     publish "${UBOOT_SRC}/spl/u-boot-spl" u-boot-spl.elf
     publish "${UBOOT_SRC}/u-boot" u-boot.elf

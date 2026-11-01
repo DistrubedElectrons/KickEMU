@@ -74,7 +74,7 @@ kernel stage publishes `Image` and the DTBs before it builds modules.
 | `kernel.config`, `System.map` | final kernel configuration and symbols |
 | `galcore.ko` | Vivante GPU kernel module for this kernel |
 | `bl31.bin`, `bl31.elf` | ATF BL31 (load address 0x920000) |
-| `u-boot-spl.bin`, `u-boot-nodtb.bin`, `u-boot.dtb`, `uboot.config` | U-Boot build |
+| `u-boot-spl.bin`, `u-boot-nodtb.bin`, `u-boot.dtb`, `u-boot.bin` (nodtb + dtb), `uboot.config` | U-Boot build |
 | `u-boot-spl.elf`, `u-boot.elf` | the same with symbols, for gdb |
 | `u-boot-spl-ddr.bin` | SPL + DDR training blobs (loaded by the BootROM to 0x7e1000) |
 | `u-boot.itb` | FIT with U-Boot, BL31 and the two U-Boot DTBs (loaded by SPL) |
