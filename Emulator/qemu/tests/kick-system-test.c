@@ -252,6 +252,7 @@ static void test_cqhci(void)
 #define MIX_AC23EN      0x80
 #define EMMC_RCA        0x00010000
 #define EMMC_BLOCKS     2
+#define EMMC_SIZE       (4 * 1024 * 1024)
 
 static uint32_t usdhc_cmd(QTestState *qts, int index, uint32_t arg,
                           uint32_t flags)
@@ -274,7 +275,7 @@ static int emmc_state(QTestState *qts)
 /*
  * Linux sends multi-block eMMC transfers with Auto CMD23 (MIX_CTRL.AC23EN,
  * block count in DS_ADDR) and no CMD12: after the last block the card must
- * be back in the transfer state on its own.
+ * be back in the transfer state on its own. Also checks the eMMC erase.
  */
 static void test_usdhc_auto_cmd23(void)
 {
@@ -286,7 +287,7 @@ static void test_usdhc_auto_cmd23(void)
 
     fd = g_file_open_tmp("kick-emmc-XXXXXX", &path, NULL);
     g_assert_cmpint(fd, >=, 0);
-    g_assert_cmpint(ftruncate(fd, 4 * 1024 * 1024), ==, 0);
+    g_assert_cmpint(ftruncate(fd, EMMC_SIZE), ==, 0);
     for (i = 0; i < sizeof(image); i++) {
         image[i] = i * 7 + 3;
     }
@@ -340,12 +341,25 @@ static void test_usdhc_auto_cmd23(void)
                      ~(uint32_t)ldl_le_p(&image[i]));
     }
     g_assert_cmpint(emmc_state(qts), ==, 4);
-    qtest_quit(qts);
-
     g_assert_cmpint(pread(fd, image, sizeof(image), 0), ==, sizeof(image));
     g_assert_cmphex(image[0], ==, (uint8_t)~3);
     g_assert_cmphex(image[sizeof(image) - 1], ==,
                     (uint8_t)~((sizeof(image) - 1) * 7 + 3));
+
+    /*
+     * Erase (CMD35/36/38) of the whole card, as Linux discards a device
+     * before mkfs: EXT_CSD ERASED_MEM_CONT is 0, so it reads back as zeros.
+     */
+    usdhc_cmd(qts, 35, 0, RSP_48 | RSP_CRC | RSP_IDX);
+    usdhc_cmd(qts, 36, EMMC_SIZE / 512 - 1, RSP_48 | RSP_CRC | RSP_IDX);
+    usdhc_cmd(qts, 38, 0, RSP_48B | RSP_CRC | RSP_IDX);
+    g_assert_cmpint(emmc_state(qts), ==, 4);
+    qtest_quit(qts);
+
+    g_assert_cmpint(pread(fd, image, sizeof(image), 0), ==, sizeof(image));
+    for (i = 0; i < sizeof(image); i++) {
+        g_assert_cmphex(image[i], ==, 0);
+    }
     close(fd);
     unlink(path);
 }
