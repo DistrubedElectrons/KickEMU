@@ -398,14 +398,21 @@ static void kick_init(MachineState *machine)
     switch (mode) {
     case KICK_BOOT_KERNEL:
         if (!machine->kernel_filename) {
-            error_report("kick: boot-mode=kernel needs -kernel");
-            exit(1);
+            /*
+             * No payload from the machine: something else (-device loader
+             * with cpu-num=0, a debugger) provides the code. QEMU still acts
+             * as the PSCI firmware.
+             */
+            info_report("kick: no -kernel, CPU 0 starts where the guest "
+                        "image loader points it");
+            s->boot_info.firmware_loaded = true;
         }
         break;
     case KICK_BOOT_UBOOT:
         if (!machine->firmware) {
-            error_report("kick: boot-mode=uboot needs -bios u-boot.bin");
-            exit(1);
+            /* U-Boot placed by -device loader,file=...,cpu-num=0 */
+            s->boot_info.firmware_loaded = true;
+            break;
         }
         if (load_image_targphys(machine->firmware, s->uboot_addr,
                                 machine->ram_size - (s->uboot_addr -
