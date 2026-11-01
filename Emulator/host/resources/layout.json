@@ -7,10 +7,10 @@
   "keycap": "#1a1b1d",
   "keycap_top": "#26272a",
   "label_print": "#dcdcdc",
-  "label_off": "#5a5b60",
+  "label_off": "#7a7b80",
   "wordmark": "#e8e8e8",
   "glass": "#050506",
-  "pad_rubber": "#151517",
+  "pad_rubber": "#101012",
   "metal": "#b9bcc2",
   "label_font": "DIN Alternate",
   "key_font": "DIN Alternate",
@@ -694,9 +694,9 @@
      218.06,
      196.6
     ],
-    "radius": 8.8,
-    "ring_radius": 11.8,
-    "ring_width": 1.93,
+    "radius": 10.09,
+    "ring_radius": 12.23,
+    "ring_width": 1.5,
     "ring_leds": [
      56,
      57,
@@ -918,7 +918,7 @@
     "text": "KICK",
     "x": 136.29,
     "y": 114.4,
-    "size": 6.44,
+    "size": 4.29,
     "colour": "wordmark_bright",
     "align": "centre",
     "font": "heading"
@@ -927,7 +927,7 @@
     "text": "MASTER",
     "x": 22.54,
     "y": 33.27,
-    "size": 3.22,
+    "size": 2.58,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -936,7 +936,7 @@
     "text": "MIN",
     "x": 16.31,
     "y": 55.37,
-    "size": 2.58,
+    "size": 1.93,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -945,7 +945,7 @@
     "text": "MAX",
     "x": 29.83,
     "y": 55.37,
-    "size": 2.58,
+    "size": 1.93,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -954,7 +954,7 @@
     "text": "REC",
     "x": 22.97,
     "y": 65.25,
-    "size": 3.22,
+    "size": 2.58,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -963,7 +963,7 @@
     "text": "MIN",
     "x": 16.53,
     "y": 87.35,
-    "size": 2.58,
+    "size": 1.93,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -972,7 +972,7 @@
     "text": "MAX",
     "x": 30.26,
     "y": 87.35,
-    "size": 2.58,
+    "size": 1.93,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -981,7 +981,7 @@
     "text": "BANK",
     "x": 216.99,
     "y": 131.57,
-    "size": 3.43,
+    "size": 2.36,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -990,7 +990,7 @@
     "text": "P1",
     "x": 245.53,
     "y": 37.13,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -999,7 +999,7 @@
     "text": "P2",
     "x": 245.53,
     "y": 62.67,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1008,7 +1008,7 @@
     "text": "P3",
     "x": 245.53,
     "y": 88.0,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1017,7 +1017,7 @@
     "text": "P4",
     "x": 245.53,
     "y": 113.11,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1026,7 +1026,7 @@
     "text": "E",
     "x": 179.43,
     "y": 147.66,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1035,7 +1035,7 @@
     "text": "F",
     "x": 204.54,
     "y": 147.66,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1044,7 +1044,7 @@
     "text": "G",
     "x": 229.86,
     "y": 147.66,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1053,7 +1053,7 @@
     "text": "H",
     "x": 255.19,
     "y": 147.66,
-    "size": 2.79,
+    "size": 2.15,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1062,7 +1062,7 @@
     "text": "GRID",
     "x": 179.64,
     "y": 170.41,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1071,7 +1071,7 @@
     "text": "SAVE",
     "x": 198.53,
     "y": 170.41,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1080,7 +1080,7 @@
     "text": "PAD MIX",
     "x": 217.2,
     "y": 170.41,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1089,7 +1089,7 @@
     "text": "PAD MUTE",
     "x": 236.09,
     "y": 170.41,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1098,7 +1098,7 @@
     "text": "FX",
     "x": 255.19,
     "y": 170.41,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1107,7 +1107,7 @@
     "text": "MASTER",
     "x": 179.64,
     "y": 193.16,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1116,7 +1116,7 @@
     "text": "LATCH",
     "x": 179.86,
     "y": 216.13,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1125,7 +1125,7 @@
     "text": "PREFS",
     "x": 255.19,
     "y": 192.95,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1134,7 +1134,7 @@
     "text": "AUTO",
     "x": 179.86,
     "y": 239.09,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1143,7 +1143,7 @@
     "text": "ON/OFF",
     "x": 198.96,
     "y": 239.09,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1152,7 +1152,7 @@
     "text": "LOOP",
     "x": 217.85,
     "y": 239.09,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1161,7 +1161,7 @@
     "text": "LINK EDIT",
     "x": 236.73,
     "y": 239.09,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1170,7 +1170,7 @@
     "text": "MIDI CTRL",
     "x": 255.62,
     "y": 239.09,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1179,7 +1179,7 @@
     "text": "HALF LVL",
     "x": 18.67,
     "y": 217.85,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
@@ -1188,151 +1188,151 @@
     "text": "NOTES",
     "x": 18.89,
     "y": 240.81,
-    "size": 2.79,
+    "size": 2.04,
     "colour": "label",
     "align": "centre",
     "font": "label"
    },
    {
     "text": "1",
-    "x": 41.85,
+    "x": 40.99,
     "y": 259.48,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "2",
-    "x": 74.05,
+    "x": 73.19,
     "y": 259.48,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "3",
-    "x": 106.24,
+    "x": 105.38,
     "y": 259.48,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "4",
-    "x": 138.43,
+    "x": 137.58,
     "y": 259.48,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "5",
-    "x": 41.85,
+    "x": 40.99,
     "y": 227.72,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "6",
-    "x": 74.05,
+    "x": 73.19,
     "y": 227.72,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "7",
-    "x": 106.24,
+    "x": 105.38,
     "y": 227.72,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "8",
-    "x": 138.43,
+    "x": 137.58,
     "y": 227.72,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "9",
-    "x": 41.85,
+    "x": 40.99,
     "y": 195.74,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "10",
-    "x": 74.05,
+    "x": 73.19,
     "y": 195.74,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "11",
-    "x": 106.24,
+    "x": 105.38,
     "y": 195.74,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "12",
-    "x": 138.43,
+    "x": 137.58,
     "y": 195.74,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "13",
-    "x": 41.85,
+    "x": 40.99,
     "y": 163.76,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "14",
-    "x": 74.05,
+    "x": 73.19,
     "y": 163.76,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "15",
-    "x": 106.24,
+    "x": 105.38,
     "y": 163.76,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
    },
    {
     "text": "16",
-    "x": 138.43,
+    "x": 137.58,
     "y": 163.76,
-    "size": 2.79,
+    "size": 1.93,
     "colour": "label",
     "align": "left",
     "font": "label"
@@ -1654,115 +1654,115 @@
     "text": "POWER",
     "x": 18.25,
     "y": 46.39,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "DC IN",
     "x": 31.94,
     "y": 46.39,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "12V = 2000 mA",
     "x": 31.94,
     "y": 43.5,
-    "size": 2.13
+    "size": 1.37
    },
    {
     "text": "LINK",
     "x": 55.83,
     "y": 45.79,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "USB",
     "x": 89.75,
     "y": 45.48,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "IN",
     "x": 126.25,
     "y": 19.32,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "OUT",
     "x": 149.07,
     "y": 19.17,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "MIDI",
     "x": 137.97,
     "y": 44.87,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "L",
     "x": 180.25,
     "y": 13.69,
-    "size": 1.98
+    "size": 1.52
    },
    {
     "text": "R",
     "x": 180.25,
     "y": 29.97,
-    "size": 1.98
+    "size": 1.52
    },
    {
     "text": "L",
     "x": 201.25,
     "y": 13.69,
-    "size": 1.98
+    "size": 1.52
    },
    {
     "text": "R",
     "x": 201.25,
     "y": 29.66,
-    "size": 1.98
+    "size": 1.52
    },
    {
     "text": "OUTPUT",
     "x": 174.32,
     "y": 44.42,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "INPUT",
     "x": 195.31,
     "y": 44.11,
-    "size": 3.04
+    "size": 2.13
    },
    {
     "text": "4/8",
     "x": 213.26,
     "y": 27.53,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "3/7",
     "x": 225.43,
     "y": 27.53,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "2/6",
     "x": 237.45,
     "y": 27.53,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "1/5",
     "x": 249.46,
     "y": 27.53,
-    "size": 2.13
+    "size": 1.52
    },
    {
     "text": "CV / GATE",
     "x": 231.67,
     "y": 43.81,
-    "size": 3.04
+    "size": 2.13
    }
   ]
  },
@@ -1811,14 +1811,14 @@
     "text": "SD",
     "x": 224.12,
     "y": 26.8,
-    "size": 4.06,
+    "size": 2.84,
     "font": "heading"
    },
    {
     "text": "PHONES",
     "x": 250.51,
     "y": 25.98,
-    "size": 2.84
+    "size": 2.03
    }
   ]
  }

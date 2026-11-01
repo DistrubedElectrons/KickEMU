@@ -26,7 +26,7 @@ namespace kickemu
             juce::Graphics g (face);
             g.addTransform (juce::AffineTransform::scale (pixelScale));
             auto& t = ctx.theme;
-            g.setGradientFill (juce::ColourGradient (t.padRubber.brighter (0.25f), body.getX(), body.getY(),
+            g.setGradientFill (juce::ColourGradient (t.padRubber.brighter (0.12f), body.getX(), body.getY(),
                                                      t.padRubber.darker (0.25f), body.getX(), body.getBottom(), false));
             g.fillPath (facePath);
             paint::fillNoise (g, facePath, ctx.noise, 0.05f, pixelScale);

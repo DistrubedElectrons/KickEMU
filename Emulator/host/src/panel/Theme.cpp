@@ -11,7 +11,10 @@ namespace kickemu
             juce::Font f (juce::FontOptions (name, 100.0f, styleFlags));
             juce::GlyphArrangement ga;
             ga.addLineOfText (f, "H", 0, 0);
-            auto capAt100 = ga.getBoundingBox (0, 1, true).getHeight();
+            // Glyph bounds in JUCE 8 are line boxes; measure the outline instead.
+            juce::Path outline;
+            ga.createPath (outline);
+            auto capAt100 = outline.getBounds().getHeight();
             auto height = capAt100 > 0.0f ? 100.0f * capHeightPx / capAt100 : capHeightPx * 1.4f;
             return f.withHeight (height).withHorizontalScale (horizontalScale);
         }

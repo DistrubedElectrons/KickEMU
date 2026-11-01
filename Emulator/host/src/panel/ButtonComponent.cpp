@@ -194,8 +194,8 @@ namespace kickemu
             legend.draw (g, off.withMultipliedAlpha (1.0f - level));
             if (level > 0.0f)
             {
-                legendGlow.draw (g, c.withMultipliedAlpha (0.85f * level));
-                legend.draw (g, c.interpolatedWith (juce::Colours::white, 0.35f).withMultipliedAlpha (level));
+                legendGlow.draw (g, c.withMultipliedAlpha (level));
+                legend.draw (g, c.interpolatedWith (juce::Colours::white, 0.45f).withMultipliedAlpha (level));
                 if (round)
                     capGlow.draw (g, c.withMultipliedAlpha (0.28f * level));
                 if (ring)

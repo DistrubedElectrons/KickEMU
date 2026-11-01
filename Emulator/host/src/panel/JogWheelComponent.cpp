@@ -190,13 +190,14 @@ namespace kickemu
             juce::Path inner;
             inner.addEllipse (juce::Rectangle<float> (topR * 2.0f, topR * 2.0f).withCentre (centre));
             g.reduceClipRegion (inner);
-            KnobComponent::drawCap (g, juce::Rectangle<float> (skirtR * 2.0f, skirtR * 2.0f).withCentre (centre), t, true, ctx.noise, pixelScale);
+            // A larger cap clipped to the top face gives the jog its wide metal cone.
+            KnobComponent::drawCap (g, juce::Rectangle<float> (skirtR * 2.5f, skirtR * 2.5f).withCentre (centre), t, true, ctx.noise, pixelScale);
         }
 
         // Ring light: a continuous diffuse guide plus one hotspot per LED.
         juce::Path ringPath;
         ringPath.addEllipse (juce::Rectangle<float> (ringR * 2.0f, ringR * 2.0f).withCentre (centre));
-        ringCore = paint::makeMask (ringPath, mm (0.35f), pixelScale, ringW * 0.55f);
+        ringCore = paint::makeMask (ringPath, mm (0.3f), pixelScale, ringW * 0.4f);
         ringGlow = paint::makeMask (ringPath, mm (2.4f), pixelScale, ringW * 1.3f);
         hotspots.clear();
         for (size_t i = 0; i < ringLeds.size(); ++i)
@@ -204,8 +205,8 @@ namespace kickemu
             const float a = -juce::MathConstants<float>::halfPi + juce::MathConstants<float>::twoPi * (float) i / (float) ringLeds.size();
             juce::Point<float> p (centre.x + ringR * std::cos (a), centre.y + ringR * std::sin (a));
             juce::Path dot;
-            dot.addEllipse (juce::Rectangle<float> (ringW * 0.9f, ringW * 0.9f).withCentre (p));
-            hotspots.push_back (paint::makeMask (dot, mm (0.9f), pixelScale));
+            dot.addEllipse (juce::Rectangle<float> (ringW * 1.1f, ringW * 0.8f).withCentre (p));
+            hotspots.push_back (paint::makeMask (dot, mm (1.1f), pixelScale));
         }
     }
 
@@ -265,12 +266,16 @@ namespace kickemu
         const float ringLevel = paint::ledAlpha (mean);
         if (ringLevel > 0.0f)
         {
-            ringGlow.draw (g, ringColour.withMultipliedAlpha (0.65f * ringLevel));
-            ringCore.draw (g, ringColour.withMultipliedAlpha (0.85f * ringLevel));
+            ringGlow.draw (g, ringColour.withMultipliedAlpha (0.45f * ringLevel));
+            ringCore.draw (g, ringColour.darker (0.2f).withMultipliedAlpha (0.6f * ringLevel));
         }
         for (size_t i = 0; i < hotspots.size(); ++i)
             if (shownRing[i] > 0.0f)
-                hotspots[i].draw (g, ringColour.interpolatedWith (juce::Colour (0xffffd0c0), 0.35f).withMultipliedAlpha (paint::ledAlpha (shownRing[i])));
+            {
+                const float level = paint::ledAlpha (shownRing[i]);
+                hotspots[i].draw (g, ringColour.withMultipliedAlpha (level));
+                hotspots[i].draw (g, ringColour.interpolatedWith (juce::Colour (0xffffd8c8), 0.45f).withMultipliedAlpha (level));
+            }
 
         {
             juce::Graphics::ScopedSaveState s (g);
@@ -283,8 +288,8 @@ namespace kickemu
             {
                 juce::Path edge;
                 edge.addEllipse (juce::Rectangle<float> (knobR * 2.0f, knobR * 2.0f).withCentre (centre));
-                g.setColour (ringColour.withMultipliedAlpha (0.18f * ringLevel));
-                g.strokePath (edge, juce::PathStrokeType (knobR * 0.12f));
+                g.setColour (ringColour.withMultipliedAlpha (0.35f * ringLevel));
+                g.strokePath (edge, juce::PathStrokeType (knobR * 0.16f));
             }
             g.drawImageTransformed (coneImage, toLogical);
         }

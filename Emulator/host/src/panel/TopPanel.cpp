@@ -56,15 +56,20 @@ namespace kickemu
         auto size = getSizeMm() * scale;
         setSize (juce::roundToInt (size.getWidth()), juce::roundToInt (size.getHeight()));
 
-        const float ps = juce::jmax (1.0f, juce::Component::getApproximateScaleFactorForComponent (this));
+        placeControls (juce::jmax (1.0f, juce::Component::getApproximateScaleFactorForComponent (this)));
+        staticLayer = {};
+        repaint();
+    }
+
+    void TopPanel::placeControls (float ps)
+    {
+        controlsPixelScale = ps;
         for (auto* c : controls)
         {
             c->place (scale, ps);
             c->setTopLeftPosition (c->getPosition() + juce::Point<int> (juce::roundToInt (shadowMarginMm * scale),
                                                                        juce::roundToInt (shadowMarginMm * scale)));
         }
-        staticLayer = {};
-        repaint();
     }
 
     void TopPanel::animate (double now, float dtMs)
@@ -114,6 +119,17 @@ namespace kickemu
             renderStatic (sg);
         }
         g.drawImageTransformed (staticLayer, juce::AffineTransform::scale (1.0f / staticPixelScale));
+
+        // The control caches follow the display's pixel density (e.g. moving to a Retina screen).
+        if (std::abs (ps - controlsPixelScale) > 0.01f && ! snapshotting)
+        {
+            juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TopPanel> (this), ps]
+            {
+                if (safe != nullptr)
+                    safe->placeControls (ps);
+            });
+            controlsPixelScale = ps;
+        }
     }
 
     void TopPanel::renderStatic (juce::Graphics& g) const
@@ -301,14 +317,13 @@ namespace kickemu
     juce::Image TopPanel::snapshot (float ps)
     {
         // Re-render the control caches at the snapshot resolution so it stays crisp.
-        for (auto* c : controls)
-        {
-            auto pos = c->getPosition();
-            c->place (scale, ps);
-            c->setTopLeftPosition (pos);
-        }
+        const float previous = controlsPixelScale;
+        snapshotting = true;
+        placeControls (ps);
         auto image = createComponentSnapshot (getLocalBounds(), true, ps);
-        setScale (scale);
+        snapshotting = false;
+        placeControls (previous);
+        staticLayer = {};
         return image;
     }
 }

@@ -104,10 +104,12 @@ namespace kickemu::paint
         const int h = juce::jmax (1, juce::roundToInt (bounds.getHeight() * pixelScale));
         m.image = juce::Image (juce::Image::SingleChannel, w, h, true, juce::SoftwareImageType());
         {
+            // Scale font and area directly instead of using a transform: glyphs drawn
+            // into a scaled software context come out at the unscaled size.
             juce::Graphics g (m.image);
-            g.addTransform (juce::AffineTransform::translation (-bounds.getX(), -bounds.getY()).scaled (pixelScale));
             g.setColour (juce::Colours::white);
-            drawLines (g, text, font, area, just, lineSpacing);
+            auto scaledArea = (area - bounds.getPosition()) * pixelScale;
+            drawLines (g, text, font.withHeight (font.getHeight() * pixelScale), scaledArea, just, lineSpacing);
         }
         blurSingleChannel (m.image, juce::roundToInt (blurRadius * pixelScale / 1.7f));
         m.bounds = bounds;

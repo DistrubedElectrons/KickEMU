@@ -47,6 +47,7 @@ namespace kickemu
 
     private:
         void renderStatic (juce::Graphics& g) const;
+        void placeControls (float pixelScale);
         void drawEnclosure (juce::Graphics& g) const;
         void drawDecor (juce::Graphics& g, const LayoutDecor& d) const;
         void drawWells (juce::Graphics& g) const;
@@ -58,7 +59,8 @@ namespace kickemu
         const Layout& layout;
         float scale = 3.0f, shadowMarginMm = 9.0f;
         juce::Image staticLayer;
-        float staticPixelScale = 0.0f;
+        float staticPixelScale = 0.0f, controlsPixelScale = 0.0f;
+        bool snapshotting = false;
 
         juce::OwnedArray<juce::Component> owned;
         std::vector<PanelControl*> controls;

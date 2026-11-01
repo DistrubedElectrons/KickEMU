@@ -80,7 +80,7 @@ namespace kickemu
                 const float am = (a0 + a1) * 0.5f;
                 const float lobe = std::pow (0.5f + 0.5f * std::cos (2.0f * (am - lightAngle)), 3.0f);
                 const float side = 0.5f + 0.5f * std::cos (am - lightAngle);
-                const float v = 0.10f + 0.62f * lobe * (0.45f + 0.55f * side);
+                const float v = 0.16f + 0.78f * lobe * (0.5f + 0.5f * side) + 0.06f * side;
                 juce::Path w;
                 w.startNewSubPath (c);
                 w.lineTo (c.x + coneR * std::cos (a0), c.y + coneR * std::sin (a0));
