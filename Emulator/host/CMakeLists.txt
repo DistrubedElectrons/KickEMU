@@ -79,6 +79,7 @@ set_target_properties(kickemu_juce PROPERTIES
 add_library(kickemu_core STATIC
     src/config/Config.cpp
     src/config/Layout.cpp
+    src/config/WindowFit.cpp
     src/emu/UnixSocket.cpp
     src/emu/UartServer.cpp
     src/emu/PanelState.cpp

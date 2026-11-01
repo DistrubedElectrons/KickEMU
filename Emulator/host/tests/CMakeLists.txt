@@ -8,6 +8,7 @@ add_executable(KickEmuTests
     McuProtocolTests.cpp
     PanelStateTests.cpp
     LayoutTests.cpp
+    WindowFitTests.cpp
     QemuCommandLineTests.cpp
     MidiStreamParserTests.cpp
     CvBridgeTests.cpp
