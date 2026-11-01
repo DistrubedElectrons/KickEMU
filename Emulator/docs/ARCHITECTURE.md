@@ -37,7 +37,7 @@ the NXP i.MX 8M Mini Reference Manual, and the application code.
 | OmniVision OV5640 camera, I2C2 0x3c (MIPI CSI) | V4L2 | camera (later phase) |
 | ROHM BD71847 PMIC (I2C1) | regulators | SPL, kernel |
 | CV/Gate converter on I2C4, addr 0x0c: Analog Devices AD5671R, 8 ch 12-bit DAC, outputs only (`0x30\|ch` write and update, `0x90\|ch` readback setup, readback of the input registers) | `/dev/i2c-3` | `Kick/modules/hardware/source/kick_I2c.cpp` (class `CV`) |
-| SAI2 (clock master, 12.288 MHz MCLK) + SDMA2 (events 2/3) to CoolAudio V4220M (no control bus, `linux,bt-sco` dummy). SDMA RAM firmware is under the NXP EULA, so the driver may run ROM scripts only. | ALSA card0, S32_LE 48 kHz | audio engine |
+| SAI2 (clock master, 12.288 MHz MCLK) + SDMA2 (events 2/3) to CoolAudio V4220M (no control bus, `linux,bt-sco` dummy). SDMA RAM firmware is under the NXP EULA and not shipped with the emulator; the SDMA model runs ROM scripts and infers the scripts at RAM entry points it does not know. | ALSA card0, S32_LE 48 kHz | audio engine |
 | uSDHC1 Wi-Fi SDIO | `mmc0` (5.4 numbers MMC hosts by probe order) | Wi-Fi |
 | uSDHC2 SD card slot | `/dev/mmcblk1` | boot, file browser, update |
 | uSDHC3 eMMC, 8-bit, CQHCI (registers at base+0x100), GPT layout from `genimage.cfg.emmc.partiton.table` | `/dev/mmcblk2` | boot, rootfs, KICK storage |
@@ -78,9 +78,9 @@ builds into `Emulator/out/qemu`. Every model lives under `hw/kick/` with its own
 
 **SoC `fsl-imx8mm`** (`hw/kick/fsl-imx8mm.c`): the real i.MX8MM memory map, interrupt
 numbers and clock tree, modelled on QEMU's `fsl-imx8mp`. Reuses upstream models where they
-exist and are correct for the 8MM (imx_serial, imx_i2c, imx_spi, imx_gpio, imx-usdhc,
+exist and are correct for the 8MM (imx_i2c, imx_spi, imx_gpio, imx-usdhc,
 imx_fec, imx_gpt, wdt_imx2, snvs), and adds 8MM-specific ones (CCM, ANATOP, SRC, GPC,
-IOMUXC/GPR, OCOTP, DDRC + DDR PHY, TMU, SDMA, SAI, LCDIF, MIPI DSIM, BootROM loader).
+IOMUXC/GPR, OCOTP, DDRC + DDR PHY, TMU, UART, SDMA, SAI, LCDIF, MIPI DSIM, BootROM loader).
 Unimplemented blocks are mapped as `unimplemented-device` so accesses are logged.
 
 **Board `kick`** (`hw/kick/kick-board.c`): VAR-SOM-MX8M-MINI on the KICK carrier.

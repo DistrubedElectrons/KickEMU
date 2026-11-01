@@ -32,6 +32,8 @@ typedef struct IMXSDMAChannel {
     uint32_t script;    /* index into IMXSDMAState.scripts, or nscripts */
     uint32_t bd;        /* current buffer descriptor address */
     uint32_t bd_bytes;  /* bytes already transferred for the current BD */
+    uint32_t inferred;  /* script kind derived for an unknown PC */
+    uint32_t logged_pc; /* last unknown PC reported (+1, 0 = none) */
 } IMXSDMAChannel;
 
 struct IMXSDMAState {
@@ -87,6 +89,7 @@ struct IMXSDMAState {
 
     IMXSDMAChannel chan[IMX_SDMA_CHANNELS];
     bool in_run;
+    bool infer_scripts;
 };
 
 #endif

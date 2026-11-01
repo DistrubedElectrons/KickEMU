@@ -42,6 +42,7 @@ uint64_t imx8mm_ccm_root_freq(IMX8MMCCMState *s, hwaddr offset);
 
 /* CCM_TARGET_ROOT offsets used by the SoC */
 #define IMX8MM_CCM_ROOT_GPT1    0xb580  /* GPT2..GPT6 follow at +0x80 */
+#define IMX8MM_CCM_ROOT_UART1   0xaf00  /* UART2..UART4 follow at +0x80 */
 
 /*
  * Per-GPT clock view. The upstream GPT model asks its IMXCCMState for

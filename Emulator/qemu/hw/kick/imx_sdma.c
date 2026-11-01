@@ -26,10 +26,20 @@
  *    The "firmware" property names the same file; its header is read for
  *    the RAM entry points (sdma_fw_scripts), which then run the semantics
  *    of the matching script. The RAM code itself is not interpreted.
- *  - A PC that is not one of those (for example mcu_2_ecspi, or a RAM
- *    script without the "firmware" property) is logged as LOG_UNIMP and
- *    the transfer is terminated with BD_RROR and an interrupt, so the
- *    driver reports an error instead of hanging.
+ *  - Script inference ("infer-scripts", on by default) covers a PC that is
+ *    none of those: the RAM entry points of a firmware the host does not
+ *    have, and PC 0, which the 5.4 driver loads for uart_2_mcu when no RAM
+ *    firmware was loaded. The semantics follow from what the driver set up
+ *    for the channel: with no DMA event routed to it (CHNENBL) it is a
+ *    memory channel (ap_2_ap); with an event, the peripheral FIFO address
+ *    in gReg[6] names the script: UART URXD (+0x00) uart_2_mcu, UART UTXD
+ *    (+0x40) mcu_2_app, SAI TDRn (+0x20..0x3c) mcu_2_shp, SAI RDRn
+ *    (+0xa0..0xbc) shp_2_mcu. The choice is logged once per channel and PC
+ *    with -d unimp.
+ *  - Anything else (for example mcu_2_ecspi), or any unknown PC with
+ *    inference off, is logged as LOG_UNIMP and the transfer is terminated
+ *    with BD_RROR and an interrupt, so the driver reports an error instead
+ *    of hanging.
  *
  * Script semantics (per context: gReg[6] peripheral FIFO address, gReg[7]
  * watermark in bytes; per BD: count, buffer address, command = access
@@ -38,7 +48,8 @@
  *    the buffer to the FIFO register, per access width;
  *  - peripheral to memory: on each DMA request read watermark bytes;
  *  - UART receive: read URXD while CHARRDY is set, up to the watermark;
- *    fewer characters (aging/idle) close the buffer early;
+ *    a request from the UART ageing timer or idle detect drains the FIFO,
+ *    closes the buffer early and clears USR1.AGTIM / USR2.IDLE;
  *  - ap_2_ap: copy count bytes from buffer to extended buffer address.
  * A completed BD gets DONE cleared (and its count set to the received byte
  * count for peripheral to memory); BD_INTR raises the channel bit in INTR;
@@ -141,9 +152,16 @@
 #define C0_SETCTX           0x07
 #define C0_GETCTX           0x03
 
-/* UART receive data register bits seen by uart_2_mcu */
+/*
+ * UART registers seen by uart_2_mcu, relative to the URXD address the
+ * driver passes as the peripheral address
+ */
+#define UART_USR1           0x94
+#define UART_USR2           0x98
 #define URXD_CHARRDY        BIT(15)
 #define URXD_ERR            BIT(14)
+#define USR1_AGTIM          BIT(8)
+#define USR2_IDLE           BIT(12)
 
 typedef enum {
     SCRIPT_NONE,
@@ -194,6 +212,22 @@ static const struct {
     { 42, "sai_2_mcu",          SCRIPT_PER_2_MCU },
     { 43, "uart_2_mcu",         SCRIPT_UART_2_MCU },
     { 44, "uartsh_2_mcu",       SCRIPT_UART_2_MCU },
+};
+
+/*
+ * Script inference: peripheral FIFO registers by their offset in the
+ * peripheral's 64 KiB block (i.MX 8M Mini UART and SAI register maps)
+ */
+static const struct {
+    uint32_t first;
+    uint32_t last;
+    const char *name;
+    SDMAScriptKind kind;
+} sdma_infer_fifos[] = {
+    { 0x00, 0x00, "uart_2_mcu (UART URXD)",     SCRIPT_UART_2_MCU },
+    { 0x40, 0x40, "mcu_2_app (UART UTXD)",      SCRIPT_MCU_2_PER },
+    { 0x20, 0x3c, "mcu_2_shp (SAI TDR)",        SCRIPT_MCU_2_PER },
+    { 0xa0, 0xbc, "shp_2_mcu (SAI RDR)",        SCRIPT_PER_2_MCU },
 };
 
 #define SDMA_FW_MAGIC       0x414d4453      /* "SDMA" */
@@ -460,6 +494,49 @@ static uint32_t sdma_ctx_greg(IMXSDMAState *s, int ch, int n)
     return sdma_dm_read(s, SDMA_CTX_BASE + ch * sdma_ctx_words(s) + 2 + n);
 }
 
+/*
+ * Derive the script of a channel whose PC is not a known entry point from
+ * its event routing and peripheral address (see the header comment).
+ */
+static SDMAScriptKind sdma_infer_script(IMXSDMAState *s, int ch)
+{
+    IMXSDMAChannel *c = &s->chan[ch];
+    uint32_t per = sdma_ctx_greg(s, ch, 6);
+    SDMAScriptKind kind = SCRIPT_UNKNOWN;
+    const char *name = NULL;
+    int ev = -1, e;
+    unsigned i;
+
+    for (e = 0; e < IMX_SDMA_EVENTS; e++) {
+        if (s->chnenbl[e] & BIT(ch)) {
+            ev = e;
+            break;
+        }
+    }
+    if (ev < 0) {
+        kind = SCRIPT_AP_2_AP;
+        name = "ap_2_ap (no event)";
+    } else {
+        for (i = 0; i < ARRAY_SIZE(sdma_infer_fifos); i++) {
+            uint32_t off = per & 0xffff;
+
+            if (off >= sdma_infer_fifos[i].first &&
+                off <= sdma_infer_fifos[i].last && !(off & 3)) {
+                kind = sdma_infer_fifos[i].kind;
+                name = sdma_infer_fifos[i].name;
+                break;
+            }
+        }
+    }
+    if (kind != SCRIPT_UNKNOWN && c->logged_pc != c->pc + 1) {
+        c->logged_pc = c->pc + 1;
+        qemu_log_mask(LOG_UNIMP, "%s: channel %d: no script known at PC %u, "
+                      "running %s for event %d, FIFO 0x%08x\n",
+                      TYPE_IMX_SDMA, ch, c->pc, name, ev, per);
+    }
+    return kind;
+}
+
 static void sdma_start_script(IMXSDMAState *s, int ch)
 {
     IMXSDMAChannel *c = &s->chan[ch];
@@ -474,6 +551,10 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
             break;
         }
     }
+    c->inferred = SCRIPT_UNKNOWN;
+    if (c->script == s->nscripts && s->infer_scripts) {
+        c->inferred = sdma_infer_script(s, ch);
+    }
     c->bd = sdma_ldl(s, sdma_ccb(s, ch));
     c->bd_bytes = 0;
     c->fresh = false;
@@ -484,7 +565,7 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
 static SDMAScriptKind sdma_kind(IMXSDMAState *s, IMXSDMAChannel *c)
 {
     return c->script < s->nscripts ? s->scripts[c->script].kind
-                                   : SCRIPT_UNKNOWN;
+                                   : c->inferred;
 }
 
 /* The channel ran out of work: clear HE, the script is done */
@@ -596,7 +677,7 @@ static void sdma_per_burst(IMXSDMAState *s, int ch)
     if (!sdma_fetch_bd(s, ch, &bd)) {
         return;
     }
-    width = kind == SCRIPT_UART_2_MCU ? 1 : sdma_access_width(bd.command);
+    width = sdma_access_width(bd.command);
     burst = MAX(wml, width);
 
     while (done < burst && c->bd_bytes < bd.count) {
@@ -606,33 +687,90 @@ static void sdma_per_burst(IMXSDMAState *s, int ch)
         if (kind == SCRIPT_MCU_2_PER) {
             dma_memory_read(s->dma_as, mem, &v, width, MEMTXATTRS_UNSPECIFIED);
             sdma_stl(s, per, le32_to_cpu(v));
-        } else if (kind == SCRIPT_PER_2_MCU) {
+        } else {
             v = cpu_to_le32(sdma_ldl(s, per));
             dma_memory_write(s->dma_as, mem, &v, width, MEMTXATTRS_UNSPECIFIED);
-        } else {
-            /* UART: one character per URXD read while data is ready */
-            uint32_t rx = sdma_ldl(s, per);
-            uint8_t ch8 = rx & 0xff;
-
-            if (!(rx & URXD_CHARRDY)) {
-                break;
-            }
-            if (rx & URXD_ERR) {
-                bd.status |= BD_RROR;
-            }
-            dma_memory_write(s->dma_as, mem, &ch8, 1, MEMTXATTRS_UNSPECIFIED);
         }
         c->bd_bytes += width;
         done += width;
     }
 
-    if (c->bd_bytes >= bd.count ||
-        (kind == SCRIPT_UART_2_MCU && done < burst && c->bd_bytes)) {
+    if (c->bd_bytes >= bd.count) {
         if (kind != SCRIPT_MCU_2_PER) {
             /* Peripheral to memory reports the received byte count */
             bd.count = MIN(c->bd_bytes, bd.count);
         }
         sdma_complete_bd(s, ch, &bd);
+    }
+}
+
+/*
+ * uart_2_mcu / uartsh_2_mcu, one DMA request. The UART raises its RX
+ * request for RRDY (RX FIFO at RXTL), for the ageing timer (AGTIM) or for
+ * idle detect (IDLE):
+ *  - RRDY: read watermark characters from URXD, continuing in the next BD
+ *    when one fills up;
+ *  - AGTIM or IDLE: the line went quiet, drain the FIFO, close the current
+ *    BD with the number of bytes received so far (the driver takes the
+ *    count from the BD) and clear the flag in the UART so the request
+ *    drops. The next characters go to the next BD.
+ * A character with URXD.ERR (overrun, frame error, break) marks the BD
+ * with BD_RROR. If the next BD still belongs to the CPU the script waits,
+ * leaving the flags set so the request stays asserted.
+ */
+static void sdma_uart_2_mcu(IMXSDMAState *s, int ch)
+{
+    IMXSDMAChannel *c = &s->chan[ch];
+    uint32_t per = sdma_ctx_greg(s, ch, 6);
+    uint32_t wml = MAX(sdma_ctx_greg(s, ch, 7) & 0xffff, 1);
+    uint32_t usr1 = sdma_ldl(s, per + UART_USR1);
+    uint32_t usr2 = sdma_ldl(s, per + UART_USR2);
+    bool flush = (usr1 & USR1_AGTIM) || (usr2 & USR2_IDLE);
+    uint32_t done = 0;
+    int guard;
+
+    for (guard = 0; guard < 65536; guard++) {
+        bool empty = false;
+        SDMABD bd;
+
+        if (!sdma_fetch_bd(s, ch, &bd)) {
+            return;
+        }
+        while (c->bd_bytes < bd.count && (flush || done < wml)) {
+            uint32_t rx = sdma_ldl(s, per);
+            uint8_t ch8 = rx & 0xff;
+
+            if (!(rx & URXD_CHARRDY)) {
+                empty = true;
+                break;
+            }
+            if (rx & URXD_ERR) {
+                bd.status |= BD_RROR;
+                sdma_write_bd_mode(s, &bd);
+            }
+            dma_memory_write(s->dma_as, bd.buf + c->bd_bytes, &ch8, 1,
+                             MEMTXATTRS_UNSPECIFIED);
+            c->bd_bytes++;
+            done++;
+        }
+        if (c->bd_bytes < bd.count && !(flush && empty)) {
+            /* Burst done, the BD stays open for the next request */
+            return;
+        }
+        if (c->bd_bytes) {
+            /* Full, or closed early by ageing/idle: report the count */
+            bd.count = c->bd_bytes;
+            if (!sdma_complete_bd(s, ch, &bd)) {
+                break;
+            }
+        }
+        if (empty || (!flush && done >= wml)) {
+            break;
+        }
+    }
+    if (flush) {
+        sdma_stl(s, per + UART_USR1, usr1 & USR1_AGTIM);
+        sdma_stl(s, per + UART_USR2, usr2 & USR2_IDLE);
     }
 }
 
@@ -651,8 +789,10 @@ static void sdma_step(IMXSDMAState *s, int ch)
         break;
     case SCRIPT_PER_2_MCU:
     case SCRIPT_MCU_2_PER:
-    case SCRIPT_UART_2_MCU:
         sdma_per_burst(s, ch);
+        break;
+    case SCRIPT_UART_2_MCU:
+        sdma_uart_2_mcu(s, ch);
         break;
     default:
         sdma_script_error(s, ch);
@@ -1095,8 +1235,8 @@ static void sdma_init(Object *obj)
 
 static const VMStateDescription vmstate_sdma_chan = {
     .name = "imx-sdma-channel",
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_BOOL(fresh, IMXSDMAChannel),
         VMSTATE_BOOL(active, IMXSDMAChannel),
@@ -1105,14 +1245,16 @@ static const VMStateDescription vmstate_sdma_chan = {
         VMSTATE_UINT32(script, IMXSDMAChannel),
         VMSTATE_UINT32(bd, IMXSDMAChannel),
         VMSTATE_UINT32(bd_bytes, IMXSDMAChannel),
+        VMSTATE_UINT32(inferred, IMXSDMAChannel),
+        VMSTATE_UINT32(logged_pc, IMXSDMAChannel),
         VMSTATE_END_OF_LIST()
     }
 };
 
 static const VMStateDescription vmstate_sdma = {
     .name = TYPE_IMX_SDMA,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32(mc0ptr, IMXSDMAState),
         VMSTATE_UINT32(intr, IMXSDMAState),
@@ -1155,6 +1297,8 @@ static const Property sdma_properties[] = {
     /* Recheck interval for a channel waiting for the CPU to return a BD */
     DEFINE_PROP_UINT32("bd-poll-us", IMXSDMAState, bd_poll_us, 100),
     DEFINE_PROP_STRING("firmware", IMXSDMAState, firmware),
+    /* Derive the script of an unknown PC from events and FIFO address */
+    DEFINE_PROP_BOOL("infer-scripts", IMXSDMAState, infer_scripts, true),
 };
 
 static void sdma_class_init(ObjectClass *klass, const void *data)

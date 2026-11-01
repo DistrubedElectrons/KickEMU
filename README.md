@@ -13,7 +13,7 @@
   <img alt="JUCE" src="https://img.shields.io/badge/JUCE-8.0.9-8dc63f">
   <img alt="SoC" src="https://img.shields.io/badge/SoC-i.MX%208M%20Mini-0b7fab">
   <img alt="kernel" src="https://img.shields.io/badge/kernel-5.4.127%20(vendor)-555">
-  <img alt="qtests" src="https://img.shields.io/badge/qtests-13%20suites-44cc11">
+  <img alt="qtests" src="https://img.shields.io/badge/qtests-14%20suites-44cc11">
   <img alt="self-test" src="https://img.shields.io/badge/board%20self--test-26%2F28-44cc11">
   <img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0%20%7C%20GPL--2.0-blue">
 </p>
@@ -64,7 +64,7 @@ connects the emulated MIDI, audio and CV ports to the host.
 | Audio: SAI2 + SDMA2, 48 kHz S32 | Playback and capture exact, through CoreAudio |
 | Control surface MCU (UART1, PktMgr protocol) | Emulated in KickEmu: pads, buttons, encoders, jog, slider, all LEDs |
 | MIDI (UART3) | CoreMIDI bridge |
-| UART receive over SDMA | In progress (works with the SDMA firmware header, inference without it is being added) |
+| UARTs (own model: FIFOs, line timing, ageing/idle) over SDMA | 20 KB round trips exact on the MCU and MIDI ports, no NXP firmware needed |
 | Booting the KICK application image | Next |
 
 Open items are listed in [Emulator/docs/soc.md](Emulator/docs/soc.md#known-gaps).

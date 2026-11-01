@@ -105,7 +105,7 @@ namespace kickemu
             if (fw.existsAsFile())
                 machineProps.add (fwProperty + "=" + fw.getFullPathName());
             else
-                cmd.warnings.add ("SDMA firmware not found, UART DMA receive needs it: " + fw.getFullPathName());
+                cmd.warnings.add ("SDMA firmware not found, using script inference: " + fw.getFullPathName());
         }
 
         if (auto* extra = config.get ("qemu.machine_properties").getDynamicObject())
