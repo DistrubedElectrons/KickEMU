@@ -1,0 +1,261 @@
+#!/bin/sh
+#
+# kick-selftest: exercise every KICK board peripheral through the real kernel drivers
+# and print one PASS/FAIL line per item, followed by a summary line:
+#   KICK-SELFTEST: <n> PASS, <m> FAIL
+# Exit status is the number of failures (capped at 125).
+#
+# Usage: kick-selftest [-c <conf>] [item...]
+# Items: soc uarts i2c cv rtc mmc eth audio touch display gpu pwrkey memory
+# Expected values come from /etc/kick-selftest.conf.
+
+CONF=/etc/kick-selftest.conf
+if [ "${1:-}" = "-c" ]; then CONF="$2"; shift 2; fi
+# shellcheck source=/dev/null
+. "${CONF}" || { echo "cannot read ${CONF}" >&2; exit 125; }
+
+PASSES=0
+FAILS=0
+pass() { PASSES=$((PASSES + 1)); printf 'PASS  %-14s %s\n' "$1" "$2"; }
+fail() { FAILS=$((FAILS + 1));   printf 'FAIL  %-14s %s\n' "$1" "$2"; }
+info() { printf '      %-14s %s\n' "" "$*"; }
+
+# of_base <sysfs device path>: controller base address from the device name
+# ("30860000.serial" -> 30860000), walking up until a platform device is found.
+of_base() {
+    p="$(readlink -f "$1" 2>/dev/null)"
+    while [ -n "${p}" ] && [ "${p}" != "/" ]; do
+        case "$(basename "${p}")" in
+            [0-9a-f]*.*) basename "${p}" | cut -d. -f1; return 0 ;;
+        esac
+        p="$(dirname "${p}")"
+    done
+    return 1
+}
+
+# input_event_dev <name>: /dev/input/eventN of the input device with that name.
+input_event_dev() {
+    for d in /sys/class/input/event*; do
+        [ -e "${d}/device/name" ] || continue
+        if [ "$(cat "${d}/device/name")" = "$1" ]; then
+            echo "/dev/input/$(basename "${d}")"
+            return 0
+        fi
+    done
+    return 1
+}
+
+test_soc() {
+    soc=/sys/devices/soc0
+    if [ ! -d "${soc}" ]; then fail soc "${soc} missing"; return; fi
+    id="$(cat "${soc}/soc_id" 2>/dev/null)"
+    detail="family=$(cat "${soc}/family" 2>/dev/null) soc_id=${id} revision=$(cat "${soc}/revision" 2>/dev/null) serial=$(cat "${soc}/serial_number" 2>/dev/null)"
+    if [ "${id}" = "${SOC_ID}" ]; then pass soc "${detail}"; else fail soc "expected ${SOC_ID}: ${detail}"; fi
+}
+
+test_uarts() {
+    for entry in ${UARTS}; do
+        tty="${entry%%:*}" base="${entry#*:}"
+        if [ ! -c "/dev/${tty}" ]; then fail "uart ${tty}" "/dev/${tty} missing"; continue; fi
+        got="$(of_base "/sys/class/tty/${tty}/device")"
+        if [ "${got}" != "${base}" ]; then
+            fail "uart ${tty}" "controller ${got:-?}, expected ${base}"
+            continue
+        fi
+        # Applying the line settings goes through the imx serial driver's set_termios.
+        if stty -F "/dev/${tty}" 115200 cs8 -cstopb -parenb raw 2>/dev/null; then
+            pass "uart ${tty}" "${base}.serial"
+        else
+            fail "uart ${tty}" "stty failed on /dev/${tty}"
+        fi
+    done
+}
+
+test_i2c() {
+    for entry in ${I2C_BUSES}; do
+        bus="${entry%%:*}" base="${entry#*:}"
+        if [ ! -c "/dev/i2c-${bus}" ]; then fail "i2c-${bus}" "/dev/i2c-${bus} missing"; continue; fi
+        got="$(of_base "/sys/bus/i2c/devices/i2c-${bus}")"
+        if [ "${got}" = "${base}" ]; then pass "i2c-${bus}" "${base}.i2c"; else fail "i2c-${bus}" "controller ${got:-?}, expected ${base}"; fi
+    done
+    for entry in ${I2C_DEVICES}; do
+        bus="$(echo "${entry}" | cut -d: -f1)" addr="$(echo "${entry}" | cut -d: -f2)"
+        label="$(echo "${entry}" | cut -d: -f3)" drv="$(echo "${entry}" | cut -d: -f4)"
+        name="${bus}-00${addr}"
+        if [ "${drv}" = "-" ]; then
+            # No kernel driver: the address must answer a read on the bus.
+            if i2cdetect -y -r "${bus}" "0x${addr}" "0x${addr}" 2>/dev/null | grep -q "^[0-9a-f]0: .*\b${addr}\b"; then
+                pass "i2c ${label}" "i2c-${bus} 0x${addr} acknowledges"
+            else
+                fail "i2c ${label}" "no ACK from 0x${addr} on i2c-${bus}"
+            fi
+            continue
+        fi
+        dev="/sys/bus/i2c/devices/${name}"
+        if [ ! -d "${dev}" ]; then fail "i2c ${label}" "${name} not in the device tree"; continue; fi
+        bound="$(basename "$(readlink -f "${dev}/driver" 2>/dev/null)" 2>/dev/null)"
+        if [ -L "${dev}/driver" ] && [ "${bound}" = "${drv}" ]; then
+            pass "i2c ${label}" "${name} bound to ${bound}"
+        else
+            fail "i2c ${label}" "${name} driver '${bound:-none}', expected ${drv}"
+        fi
+    done
+}
+
+test_cv() {
+    # Same transactions as the application's CV class (kick_I2c.cpp): a 3-byte DAC write,
+    # then a 3-byte read select followed by a 2-byte read.
+    dac=$(( 0x30 | CV_TEST_CHANNEL )) sel=$(( 0x90 | CV_TEST_CHANNEL ))
+    if ! i2ctransfer -y "${CV_BUS}" "w3@${CV_ADDR}" "${dac}" 0x00 0x00 2>/dev/null; then
+        fail cv "DAC write to ${CV_ADDR} on i2c-${CV_BUS} failed"; return
+    fi
+    if ! i2ctransfer -y "${CV_BUS}" "w3@${CV_ADDR}" "${sel}" 0x00 0x00 2>/dev/null; then
+        fail cv "read select failed"; return
+    fi
+    val="$(i2ctransfer -y "${CV_BUS}" "r2@${CV_ADDR}" 2>/dev/null)"
+    if [ -n "${val}" ]; then pass cv "channel ${CV_TEST_CHANNEL}: DAC 0 written, ADC read ${val}"; else fail cv "ADC read failed"; fi
+}
+
+test_rtc() {
+    # The board RTC is the one on I2C; the SoC's SNVS RTC is listed for information.
+    found=0
+    for r in /sys/class/rtc/rtc*; do
+        [ -e "${r}" ] || continue
+        n="$(basename "${r}")"
+        if readlink -f "${r}/device" | grep -q '/i2c-'; then
+            found=1
+            t="$(hwclock -r -f "/dev/${n}" 2>&1)"
+            if [ $? -eq 0 ]; then pass rtc "/dev/${n} ($(cat "${r}/name")): ${t}"; else fail rtc "/dev/${n} read failed: ${t}"; fi
+        else
+            info "rtc /dev/${n} ($(cat "${r}/name")) present"
+        fi
+    done
+    [ "${found}" = 1 ] || fail rtc "no I2C RTC registered"
+}
+
+test_mmc() {
+    for entry in ${MMC_DEVICES}; do
+        blk="$(echo "${entry}" | cut -d: -f1)" base="$(echo "${entry}" | cut -d: -f2)"
+        type="$(echo "${entry}" | cut -d: -f3)" req="$(echo "${entry}" | cut -d: -f4)"
+        if [ ! -b "/dev/${blk}" ]; then
+            if [ "${req}" = 1 ]; then fail "mmc ${blk}" "/dev/${blk} missing"; else info "mmc ${blk} absent (optional)"; fi
+            continue
+        fi
+        got="$(of_base "/sys/block/${blk}/device")"
+        t="$(cat "/sys/block/${blk}/device/type" 2>/dev/null)"
+        parts="$(ls -d /sys/block/${blk}/${blk}p* 2>/dev/null | wc -l)"
+        size=$(( $(cat "/sys/block/${blk}/size") / 2048 ))
+        if [ "${got}" != "${base}" ] || [ "${t}" != "${type}" ]; then
+            fail "mmc ${blk}" "controller ${got:-?} type ${t:-?}, expected ${base} ${type}"
+        elif [ "${parts}" -lt 1 ]; then
+            fail "mmc ${blk}" "${t} ${size} MiB, no partitions"
+        else
+            pass "mmc ${blk}" "${t} on ${base}, ${size} MiB, ${parts} partitions"
+        fi
+        if [ "${t}" = MMC ]; then
+            # Reads EXT_CSD with CMD8 through the mmc block driver ioctl.
+            rev="$(mmc extcsd read "/dev/${blk}" 2>/dev/null | grep -m1 'Extended CSD rev')"
+            if [ -n "${rev}" ]; then pass "mmc extcsd" "${rev}"; else fail "mmc extcsd" "EXT_CSD read failed on ${blk}"; fi
+        fi
+    done
+}
+
+test_eth() {
+    if [ ! -d "/sys/class/net/${ETH_IF}" ]; then fail eth "${ETH_IF} missing"; return; fi
+    ip link set "${ETH_IF}" up
+    i=0
+    while [ "$(cat "/sys/class/net/${ETH_IF}/carrier" 2>/dev/null)" != 1 ] && [ ${i} -lt "${ETH_LINK_TIMEOUT}" ]; do
+        sleep 1; i=$((i + 1))
+    done
+    speed="$(ethtool "${ETH_IF}" 2>/dev/null | sed -n 's/^[[:space:]]*Speed: //p')"
+    if [ "$(cat "/sys/class/net/${ETH_IF}/carrier" 2>/dev/null)" = 1 ]; then
+        pass "eth link" "${ETH_IF} up, ${speed:-unknown speed}"
+    else
+        fail "eth link" "no carrier on ${ETH_IF} after ${ETH_LINK_TIMEOUT}s"; return
+    fi
+    if udhcpc -i "${ETH_IF}" -n -q -t "${DHCP_TIMEOUT}" -T 1 -s /usr/share/udhcpc/default.script >/dev/null 2>&1; then
+        pass "eth dhcp" "$(ip -4 -o addr show "${ETH_IF}" | awk '{print $4}')"
+    else
+        fail "eth dhcp" "no lease within ${DHCP_TIMEOUT} tries"
+    fi
+}
+
+test_audio() {
+    if [ ! -d "/proc/asound/card${AUDIO_CARD}" ]; then fail audio "ALSA card${AUDIO_CARD} missing"; return; fi
+    info "card${AUDIO_CARD}: $(cat "/proc/asound/card${AUDIO_CARD}/id")"
+    dev="hw:${AUDIO_CARD},0"
+    fmt="-f ${AUDIO_FORMAT} -r ${AUDIO_RATE} -c ${AUDIO_CHANNELS}"
+    # shellcheck disable=SC2086
+    if out="$(aplay -q -D "${dev}" -t raw ${fmt} -d "${AUDIO_SECONDS}" /dev/zero 2>&1)"; then
+        pass "audio play" "${dev} ${AUDIO_FORMAT} ${AUDIO_RATE} Hz ${AUDIO_CHANNELS} ch"
+    else
+        fail "audio play" "${out}"
+    fi
+    want=$(( AUDIO_RATE * AUDIO_CHANNELS * 4 * AUDIO_SECONDS ))
+    # shellcheck disable=SC2086
+    if out="$(arecord -q -D "${dev}" -t raw ${fmt} -d "${AUDIO_SECONDS}" /tmp/kick-capture.raw 2>&1)"; then
+        got="$(wc -c < /tmp/kick-capture.raw)"
+        if [ "${got}" -ge $(( want * 9 / 10 )) ]; then
+            pass "audio capture" "${got} bytes in ${AUDIO_SECONDS}s"
+        else
+            fail "audio capture" "only ${got} of ${want} bytes"
+        fi
+    else
+        fail "audio capture" "${out}"
+    fi
+    rm -f /tmp/kick-capture.raw
+}
+
+test_touch() {
+    ev="$(input_event_dev "${TOUCH_NAME}")"
+    if [ -z "${ev}" ]; then fail touch "no input device '${TOUCH_NAME}'"; return; fi
+    if [ "${TOUCH_EVENT_TIMEOUT}" -le 0 ]; then pass touch "${ev} present"; return; fi
+    echo "      touch the screen within ${TOUCH_EVENT_TIMEOUT}s ..."
+    n="$(timeout "${TOUCH_EVENT_TIMEOUT}" evtest "${ev}" 2>/dev/null | grep -c 'EV_ABS')"
+    if [ "${n}" -gt 0 ]; then pass touch "${ev}: ${n} absolute events"; else fail touch "${ev} present, no events in ${TOUCH_EVENT_TIMEOUT}s"; fi
+}
+
+test_display() {
+    if [ -c "${DRM_CARD}" ]; then
+        drv="$(basename "$(readlink -f "/sys/class/drm/$(basename "${DRM_CARD}")/device/driver")")"
+        modes="$(modetest -c 2>/dev/null | grep -A3 -m1 'connected' | grep -o '[0-9]*x[0-9]*' | head -n 1)"
+        if modetest -c 2>/dev/null | grep -q '[[:space:]]connected[[:space:]]'; then
+            pass drm "${DRM_CARD} (${drv}), connector connected, mode ${modes:-?}"
+        else
+            fail drm "${DRM_CARD} (${drv}) has no connected connector"
+        fi
+    else
+        fail drm "${DRM_CARD} missing"
+    fi
+    if [ -c "${FB_DEV}" ]; then
+        geom="$(fbset -fb "${FB_DEV}" 2>/dev/null | sed -n 's/^[[:space:]]*geometry \([0-9]*\) \([0-9]*\).*/\1x\2/p')"
+        if [ "${geom}" = "${PANEL_MODE}" ]; then pass fbdev "${FB_DEV} ${geom}"; else fail fbdev "${FB_DEV} ${geom:-?}, expected ${PANEL_MODE}"; fi
+    else
+        fail fbdev "${FB_DEV} missing"
+    fi
+}
+
+test_gpu() {
+    if ! grep -q "^${GPU_MODULE} " /proc/modules; then
+        out="$(modprobe "${GPU_MODULE}" 2>&1)" || { fail gpu "modprobe ${GPU_MODULE}: ${out}"; return; }
+    fi
+    if [ -c "${GPU_DEV}" ]; then pass gpu "${GPU_MODULE} loaded, ${GPU_DEV} present"; else fail gpu "${GPU_MODULE} loaded but ${GPU_DEV} missing"; fi
+}
+
+test_pwrkey() {
+    ev="$(input_event_dev "${PWRKEY_NAME}")"
+    if [ -n "${ev}" ]; then pass pwrkey "${ev}"; else fail pwrkey "no input device '${PWRKEY_NAME}'"; fi
+}
+
+test_memory() {
+    if out="$(memtester "${MEMTEST_SIZE}" 1 2>&1)"; then pass memory "memtester ${MEMTEST_SIZE} x1"; else fail memory "$(echo "${out}" | grep -m1 -i fail)"; fi
+}
+
+ITEMS="${*:-soc uarts i2c cv rtc mmc eth audio touch display gpu pwrkey memory}"
+echo "KICK self-test, kernel $(uname -r)"
+for item in ${ITEMS}; do
+    "test_${item}"
+done
+echo "KICK-SELFTEST: ${PASSES} PASS, ${FAILS} FAIL"
+[ "${FAILS}" -gt 125 ] && FAILS=125
+exit "${FAILS}"
