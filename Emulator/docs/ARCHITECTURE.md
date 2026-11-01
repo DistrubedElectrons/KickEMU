@@ -36,7 +36,7 @@ the NXP i.MX 8M Mini Reference Manual, and the application code.
 | NXP PCA9534 GPIO expander, I2C2 0x20 (gpio-keys, hogs) | gpiochip, input | system |
 | OmniVision OV5640 camera, I2C2 0x3c (MIPI CSI) | V4L2 | camera (later phase) |
 | ROHM BD71847 PMIC (I2C1) | regulators | SPL, kernel |
-| CV/Gate converter on I2C4, addr 0x0c, 8 ch 12-bit DAC/ADC (`0x30\|ch` DAC write, `0x90\|ch` read; exact part to be identified) | `/dev/i2c-3` | `Kick/modules/hardware/source/kick_I2c.cpp` (class `CV`) |
+| CV/Gate converter on I2C4, addr 0x0c: Analog Devices AD5671R, 8 ch 12-bit DAC, outputs only (`0x30\|ch` write and update, `0x90\|ch` readback setup, readback of the input registers) | `/dev/i2c-3` | `Kick/modules/hardware/source/kick_I2c.cpp` (class `CV`) |
 | SAI2 (clock master, 12.288 MHz MCLK) + SDMA2 (events 2/3) to CoolAudio V4220M (no control bus, `linux,bt-sco` dummy). SDMA RAM firmware is under the NXP EULA, so the driver may run ROM scripts only. | ALSA card0, S32_LE 48 kHz | audio engine |
 | uSDHC1 Wi-Fi SDIO | `mmc0` (5.4 numbers MMC hosts by probe order) | Wi-Fi |
 | uSDHC2 SD card slot | `/dev/mmcblk1` | boot, file browser, update |
@@ -173,10 +173,12 @@ properties `emmc` / `sd`.
 
 One JSON object per line, UTF-8, `\n` terminated.
 
-- QEMU to host, on every DAC update: `{"ch":0,"dac":2048,"volts":2.500}`. `volts` uses the
-  same 0..5 V scale as `kick_I2c.cpp`.
-- Host to QEMU, to drive an input channel: `{"ch":4,"adc":1024}`. The value is returned by
-  the next conversion read of that channel.
+- QEMU to host, on every change of a channel output: `{"ch":0,"dac":2048,"volts":2.500}`.
+  `volts` = 2.5 V x 2 x code / 4096 (0..5 V, the scale of `kick_I2c.cpp`); it is 0 while the
+  channel is powered down. The state of all 8 channels is sent when the socket connects.
+- Host to QEMU: nothing. The converter is an AD5671R DAC without inputs (the `0x90` reads in
+  `kick_I2c.cpp` read back the DAC registers), so there is no input channel to drive. Lines
+  sent by the host are read and discarded.
 
 ### Touch conventions
 

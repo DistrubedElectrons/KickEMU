@@ -10,13 +10,9 @@ config IMX8MM_LCDIF
 config IMX8MM_MIPI_DSIM
     bool
 
-config SN65DSI83
+config KICK_AD5675R
     bool
-    depends on I2C
-    select IMX8MM_MIPI_DSIM
-
-config VIVANTE_GPU
-    bool
+    select I2C
 
 config KICK_DISPLAY_BENCH
     bool
@@ -28,3 +24,41 @@ config KICK_DISPLAY_BENCH
     select IMX_I2C
     select SN65DSI83
     select VIVANTE_GPU
+
+config KICK_GOODIX_GT911
+    bool
+    select I2C
+
+config KICK_IMX8MM_SAI
+    bool
+
+config KICK_IMX_SDMA
+    bool
+
+config KICK_PCA9534
+    bool
+    select I2C
+
+config KICK_PCF85263
+    bool
+    select I2C
+
+config KICK_PERIPH_TEST
+    bool
+    default y
+    depends on AARCH64
+    select IMX_I2C
+    select KICK_AD5675R
+    select KICK_GOODIX_GT911
+    select KICK_IMX8MM_SAI
+    select KICK_IMX_SDMA
+    select KICK_PCA9534
+    select KICK_PCF85263
+
+config SN65DSI83
+    bool
+    depends on I2C
+    select IMX8MM_MIPI_DSIM
+
+config VIVANTE_GPU
+    bool
