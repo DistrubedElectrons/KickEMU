@@ -63,7 +63,14 @@ genimage \
     --config "${stage}/genimage.cfg"
 
 # Copy out keeping holes, so the multi-GB image only uses the space of its content.
-cp --sparse=always "${stage}/output/${image_name}" "${OUT}/.${EMMC_NAME}.tmp"
+# dd skips zero blocks with seeks; cp --sparse fails on the macOS file sharing mount
+# because it cannot punch holes there.
+rm -f "${OUT}/.${EMMC_NAME}.tmp"
+dd if="${stage}/output/${image_name}" of="${OUT}/.${EMMC_NAME}.tmp" bs=1M conv=sparse status=none
+# genimage stops the file after the last written data (the storage partition is empty and
+# there is no backup GPT), so extend it to the device size. genimage and truncate both
+# read "14G" as GiB.
+truncate -s "${EMMC_SIZE}" "${OUT}/.${EMMC_NAME}.tmp"
 mv -f "${OUT}/.${EMMC_NAME}.tmp" "${OUT}/${EMMC_NAME}"
 sgdisk -p "${OUT}/${EMMC_NAME}" >&2
 sgdisk -i 2 "${OUT}/${EMMC_NAME}" | grep -i 'unique guid' >&2
