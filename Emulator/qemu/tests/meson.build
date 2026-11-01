@@ -10,6 +10,7 @@ kick_qtests = [
   'kick-pca9534-test',
   'kick-pcf85263-test',
   'kick-sai-test',
+  'kick-sdma-test',
 ]
 
 qtests_aarch64 += kick_qtests
