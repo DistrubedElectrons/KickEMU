@@ -5,7 +5,10 @@
 #   meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'
 
 kick_qtests = [
+  'kick-ad5675r-test',
   'kick-gt911-test',
+  'kick-pca9534-test',
+  'kick-pcf85263-test',
 ]
 
 qtests_aarch64 += kick_qtests
