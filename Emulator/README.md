@@ -28,10 +28,17 @@ boot a KICK firmware image yet.
 ```sh
 git submodule update --init --recursive Emulator/third_party
 Emulator/qemu/build.sh            # QEMU with the KICK models, into Emulator/out/qemu
+
+# Host application (KickEmu) and its tests, into Emulator/out/host
+cmake -S Emulator/host -B Emulator/out/host -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build Emulator/out/host
+ctest --test-dir Emulator/out/host --output-on-failure
+open Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app
 ```
 
-The remaining build steps (boot chain, test image, host application) are added as each
-component lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
+See [host/README.md](host/README.md) for running KickEmu, the keyboard map and settings.
+
+The remaining build steps (boot chain, test image) are added as each component lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
 
 ## Configuration
 

@@ -166,10 +166,42 @@ One JSON object per line, UTF-8, `\n` terminated.
 - Host to QEMU, to drive an input channel: `{"ch":4,"adc":1024}`. The value is returned by
   the next conversion read of that channel.
 
+### Control-surface MCU (UART1) as emulated by the host
+
+Framing is `ComProtocol/PktMgr` (`'M' 'T' type dir cmd size data[size-1] crc`, CRC-8
+poly 0x31, init 0xff). Details the host relies on, all taken from the Linux side
+(`Kick/modules/input_events/input_events.cpp`, `kick_AppHome.cpp`):
+
+- MCU -> Linux frames carry **one trailer byte** after the CRC (`\n`): the Linux parser
+  consumes `data[5] + 7` bytes per packet and feeds all but the last into PktMgr. Only
+  `EN_PKT_REQUEST` packets are dispatched, so the MCU sends everything as requests.
+- Handshake: the MCU repeats `SYSTEM/EN_SYS_CHECK_COMM_STATUS [1]` until the app answers
+  `SYSTEM/EN_SYS_COMM_INIT`, then sends `SYSTEM/EN_SYS_GET_SW_VER [major, minor]`, and
+  `CHECK_COMM_STATUS [2]` as keepalive (echoed by the app).
+- Events: buttons `BUTTON/EN_BTN_STATUS [id, state]` (ids `BtnLedSequence`, shift
+  functions use their own ids), pads `PAD/EN_PAD_STATE [pad, state, velocity, aftertouch]`,
+  encoders `KNOBS/EN_KNOB_ROTARY [knob, direction, steps]` (jog = `EN_KNOB_CENTER`, push =
+  button `EN_KNOB_ENTER`), slider `SLIDER/EN_SLIDER_TOUCH_INPUT [percent]`.
+  Aftertouch updates (only after `EN_PAD_SET_AFTER_TOUCH [1]`) use state 2
+  (`host.mcu.aftertouch_state`); this value is an assumption, no MCU firmware source is in
+  the repository.
+- LEDs `LED/EN_LED_SET_SINGLE_LED [id, PadButtonState, colourId]`. Bank (0-7) and
+  transport (44-46) LEDs are exclusive. The jog wheel ring and the four LINK LEDs have no
+  id in `dcl_contracts.h`; the emulator maps them to **LED ids 56-61** (ring, clockwise
+  from the top) and **62-65** (LINK LEDs, left to right), defined in
+  `Emulator/host/resources/layout.json`. While the guest has not addressed the ring, it is
+  lit whenever UART1 is connected. With `host.mcu.button_led_colour = palette`, a colourId
+  above 0 selects a pad palette colour for a key LED.
+
 ### Touch conventions
 
 QEMU absolute axes run 0..0x7fff. The GT911 model scales them to its configured panel size
 (default 800x480, as `touchscreen-size-x/y` in the board DT) and reports up to 5 contacts.
+The host maps the visible framebuffer area (1024x600 on the KICK) to the full axis range
+and sends, per change, the same `mtt` sequence as QEMU's `console_handle_touch_event()`
+(type event, `btn touch`, `data` x, `data` y for every active slot). `abs` x/y for the
+primary contact go in a separate command, so a machine without an absolute pointer device
+does not reject the multitouch events.
 
 ## Phases
 
