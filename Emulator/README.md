@@ -5,7 +5,8 @@ the boot chain, kernel drivers, the KICK firmware and custom firmware on a compu
 
 Status: **0.1, hardware layer working**. The vendor kernel 5.4.127 boots to a shell under
 HVF in about 1.5 s and passes the board self-test; the bare-metal demo drives the screen and
-the front panel. Booting the KICK application image is the next phase.
+the front panel; the KICK application (KT_Kick) runs on a Debian 12 root file system with
+its screen, touch, MCU link, audio and network (see "Running the KICK application").
 
 ## How it works
 
@@ -46,6 +47,21 @@ KickEmu, keyboard map, settings). The device tree checklist for the models is
 [docs/board-dt.md](docs/board-dt.md). The models are described in
 [docs/display-gpu.md](docs/display-gpu.md) and [docs/devices-i2c-audio.md](docs/devices-i2c-audio.md).
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design.
+
+## Running the KICK application
+
+`rootfs/build.sh` builds a Debian 12 arm64 root file system from prebuilt packages with
+KT_Kick (the community arm64 build of the KICK app from
+[KickEm-Tools/0700-AAM](https://github.com/KickEm-Tools/0700-AAM), AGPL-3.0), X on the
+framebuffer and the KICK's own service files, and writes it into the eMMC image. KickEmu
+boots it with the `kick-app` profile; the app screen shows after about 17 s under HVF.
+
+```sh
+Emulator/rootfs/build.sh                  # needs the boot build, a container runtime and gh
+Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app/Contents/MacOS/KickEmu --profile kick-app
+```
+
+Details, the start sequence compared with the KICK, and licenses: [rootfs/README.md](rootfs/README.md).
 
 ## Configuration
 

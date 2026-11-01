@@ -1,0 +1,33 @@
+# X on the KICK framebuffer (LCDIF -> DSIM -> SN65DSI84, 1024x600) for KT_Kick.
+# Written by Emulator/rootfs/build.sh from .rootfs.x in kickemu.json.
+
+Section "ServerFlags"
+    Option "BlankTime"   "0"
+    Option "StandbyTime" "0"
+    Option "SuspendTime" "0"
+    Option "OffTime"     "0"
+EndSection
+
+# JUCE renders in software; GLX would only load Mesa's llvmpipe (about 8 s at start).
+Section "Extensions"
+    Option "GLX" "Disable"
+EndSection
+
+Section "Device"
+    Identifier "kick-fb"
+    Driver     "fbdev"
+    Option     "fbdev" "@FBDEV@"
+EndSection
+
+Section "Screen"
+    Identifier "kick-screen"
+    Device     "kick-fb"
+EndSection
+
+# GT911 touch controller: evdev scales its absolute axes (800x480 on the KICK) to the screen.
+Section "InputClass"
+    Identifier      "kick-touch"
+    MatchProduct    "@TOUCH_PRODUCT@"
+    MatchDevicePath "/dev/input/event*"
+    Driver          "evdev"
+EndSection

@@ -1,0 +1,25 @@
+# KT_Kick on X. The KICK runs ktkick.service (kt_kick.sh) inside a Weston session that udev
+# starts when the display appears; here the same kind of udev hook (71-kick-x.rules) starts
+# this unit, which runs X on the framebuffer through xinit with KT_Kick as its only client.
+# Resource limits as in the KICK's ktkick.service.
+[Unit]
+Description=KT_Kick on X (framebuffer)
+Wants=network.target
+After=syslog.target network-online.target systemd-udev-trigger.service sound.target
+ConditionPathExists=/usr/bin/KT_Kick
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/default/kick-x
+EnvironmentFile=-/etc/default/ktkick
+WorkingDirectory=/home/Kick
+ExecStart=/usr/bin/xinit /usr/bin/KT_Kick -- /usr/bin/Xorg ${KICK_X_DISPLAY} ${KICK_X_VT} $KICK_X_ARGS
+Restart=on-failure
+RestartSec=2
+CPUWeight=20
+CPUQuota=85%
+IOWeight=20
+MemorySwapMax=0
+
+[Install]
+WantedBy=multi-user.target

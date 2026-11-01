@@ -158,6 +158,34 @@ public:
             expect (after (cmd.args, "-append").contains ("kick.selftest=1"));
         }
 
+        beginTest ("kick-app profile boots the Debian rootfs from eMMC partition 1");
+        {
+            Config c;
+            c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
+            expect (c.applyProfile ("kick-app").wasOk());
+            // The profile names its own eMMC image, not the test image of the default config.
+            expect (c.getString ("storage.emmc_image").endsWith ("emmc-kick-app.img"));
+            c.set ("run_dir", tmp.getFullPathName());
+            c.set ("qemu.binary", fakeQemu.getFullPathName());
+            c.set ("boot.kernel_image", kernel.getFullPathName());
+            c.set ("boot.dtb", dtb.getFullPathName());
+            c.set ("storage.emmc_image", emmc.getFullPathName());
+            c.set ("storage.test_initrd", tmp.getChildFile ("initramfs.cpio.gz").getFullPathName());
+            auto cmd = QemuCommandLine::build (c);
+            expect (cmd.ok(), cmd.error);
+            expectEquals (after (cmd.args, "-kernel"), kernel.getFullPathName());
+            expectEquals (after (cmd.args, "-dtb"), dtb.getFullPathName());
+            expect (! cmd.args.contains ("-initrd"));
+            expect (after (cmd.args, "-machine").contains ("emmc=emmc"));
+            expect (after (cmd.args, "-drive").contains ("file=" + emmc.getFullPathName()));
+            auto append = after (cmd.args, "-append");
+            expect (append.contains ("root=/dev/mmcblk2p1"));
+            expect (append.contains ("console=ttymxc3,115200"));
+            expect (! append.contains ("kick.selftest"));
+            // The MCU stays on UART1 (ttymxc0), where KT_Kick opens it.
+            expectEquals (after (cmd.args, "-serial", 0), juce::String ("chardev:mcu"));
+        }
+
         beginTest ("virt-test profile");
         {
             Config c;
