@@ -94,7 +94,7 @@ static bool kick_type_available(const char *type)
 
 static I2CBus *kick_i2c_bus(KickMachineState *s, int n)
 {
-    return s->soc.i2c[n - 1].bus;
+    return s->soc.i2c[n - 1].parent_obj.bus;
 }
 
 static DeviceState *kick_gpio(KickMachineState *s, int n)

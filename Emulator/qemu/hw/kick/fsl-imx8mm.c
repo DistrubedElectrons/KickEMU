@@ -226,7 +226,7 @@ static void fsl_imx8mm_init(Object *obj)
                             TYPE_OR_IRQ);
     for (i = 0; i < FSL_IMX8MM_NUM_I2CS; i++) {
         g_autofree char *name = g_strdup_printf("i2c%d", i + 1);
-        object_initialize_child(obj, name, &s->i2c[i], TYPE_IMX_I2C);
+        object_initialize_child(obj, name, &s->i2c[i], TYPE_IMX8MM_I2C);
     }
     for (i = 0; i < FSL_IMX8MM_NUM_GPIOS; i++) {
         g_autofree char *name = g_strdup_printf("gpio%d", i + 1);
@@ -515,11 +515,15 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
         }
     }
 
+    /* I2C1..4: the 8MM wrapper's own window carries the full register set */
     for (i = 0; i < FSL_IMX8MM_NUM_I2CS; i++) {
-        if (!fsl_imx8mm_sysbus(s, &s->i2c[i], MMAP(I2C1) + i * 0x10000,
-                               i2c_irq[i], errp)) {
+        SysBusDevice *sbd = SYS_BUS_DEVICE(&s->i2c[i]);
+
+        if (!sysbus_realize(sbd, errp)) {
             return false;
         }
+        sysbus_mmio_map(sbd, IMX8MM_I2C_MMIO, MMAP(I2C1) + i * 0x10000);
+        sysbus_connect_irq(sbd, 0, fsl_imx8mm_irq(s, i2c_irq[i]));
     }
 
     /* GPIO1..5: combined interrupts for pins 0-15 and 16-31 */

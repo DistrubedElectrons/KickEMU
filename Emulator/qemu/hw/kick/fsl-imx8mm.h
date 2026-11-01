@@ -32,6 +32,7 @@
 #include "imx8mm_cqhci.h"
 #include "imx8mm_dispmix.h"
 #include "imx8mm_gpc.h"
+#include "imx8mm_i2c.h"
 #include "imx8mm_iomuxc.h"
 #include "imx8mm_lcdif.h"
 #include "imx8mm_mipi_dsim.h"
@@ -304,7 +305,7 @@ struct FslImx8mmState {
     OrIRQState          gpt5_gpt6_irq;
     IMXGPIOState        gpio[FSL_IMX8MM_NUM_GPIOS];
     IMX8MMUARTState     uart[FSL_IMX8MM_NUM_UARTS];
-    IMXI2CState         i2c[FSL_IMX8MM_NUM_I2CS];
+    IMX8MMI2CState      i2c[FSL_IMX8MM_NUM_I2CS];
     IMXSPIState         spi[FSL_IMX8MM_NUM_ECSPIS];
     SDHCIState          usdhc[FSL_IMX8MM_NUM_USDHCS];
     IMX8MMCQHCIState    cqhci[FSL_IMX8MM_NUM_USDHCS];
