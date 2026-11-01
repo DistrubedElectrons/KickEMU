@@ -15,6 +15,9 @@ config SN65DSI83
     depends on I2C
     select IMX8MM_MIPI_DSIM
 
+config VIVANTE_GPU
+    bool
+
 config KICK_DISPLAY_BENCH
     bool
     default y
@@ -24,3 +27,4 @@ config KICK_DISPLAY_BENCH
     select IMX8MM_MIPI_DSIM
     select IMX_I2C
     select SN65DSI83
+    select VIVANTE_GPU

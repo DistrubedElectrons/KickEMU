@@ -25,6 +25,7 @@
 #include "hw/kick/imx8mm_lcdif.h"
 #include "hw/kick/imx8mm_mipi_dsim.h"
 #include "hw/kick/sn65dsi83.h"
+#include "hw/kick/vivante_gpu.h"
 #include "system/address-spaces.h"
 
 /* i.MX8MM memory map (RM chapter 2.1, imx8mm.dtsi). */
@@ -32,6 +33,8 @@
 #define BENCH_LCDIF_BASE        0x32e00000
 #define BENCH_DSIM_BASE         0x32e10000
 #define BENCH_DISPMIX_BASE      0x32e28000
+#define BENCH_GPU3D_BASE        0x38000000
+#define BENCH_GPU2D_BASE        0x38008000
 #define BENCH_I2C1_BASE         0x30a20000
 #define BENCH_SN65DSI83_ADDR    0x2c
 
@@ -72,6 +75,14 @@ static void kick_display_bench_init(MachineState *ms)
                              &error_fatal);
     object_property_add_child(OBJECT(ms), "sn65dsi83", OBJECT(i2c));
     i2c_slave_realize_and_unref(i2c, IMX_I2C(dev)->bus, &error_fatal);
+
+    dev = qdev_new(TYPE_IMX8MM_GPU3D);
+    object_property_add_child(OBJECT(ms), "gpu3d", OBJECT(dev));
+    bench_map(dev, BENCH_GPU3D_BASE);
+
+    dev = qdev_new(TYPE_IMX8MM_GPU2D);
+    object_property_add_child(OBJECT(ms), "gpu2d", OBJECT(dev));
+    bench_map(dev, BENCH_GPU2D_BASE);
 }
 
 static void kick_display_bench_machine_init(MachineClass *mc)

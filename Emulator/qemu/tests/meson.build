@@ -6,6 +6,7 @@
 
 kick_qtests = [
   'kick-dsim-test',
+  'kick-gpu-test',
   'kick-lcdif-test',
 ]
 
