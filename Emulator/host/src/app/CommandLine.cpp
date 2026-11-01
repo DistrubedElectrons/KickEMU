@@ -25,6 +25,7 @@ namespace kickemu
             else if (a == "--headless") cl.headless = true;
             else if (a == "--print-command") cl.printCommand = true;
             else if (a == "--no-start") cl.noAutostart = true;
+            else if (a == "--presentation") cl.presentation = true;
             else if (a.startsWith ("--config")) cl.configFile = juce::File::getCurrentWorkingDirectory().getChildFile (value());
             else if (a.startsWith ("--profile")) cl.profile = value();
             else if (a == "--set") cl.overrides.add (value());
@@ -59,6 +60,7 @@ namespace kickemu
                "  --no-start           do not start QEMU automatically\n"
                "  --print-command      print the QEMU command line and exit\n"
                "  --view <top|rear|front>  view to show at start\n"
+               "  --presentation       start in presentation mode (device only)\n"
                "  --screenshot <png>   save a 2x image of the window after a delay, then quit\n"
                "  --screenshot-delay <ms>  delay before --screenshot (default 4000)\n"
                "  --version            print version, branch and commit\n"

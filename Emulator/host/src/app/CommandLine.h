@@ -18,6 +18,7 @@ namespace kickemu
         juce::File screenshot;          // --screenshot <png>: save the window and quit
         int screenshotDelayMs = 4000;   // --screenshot-delay <ms>
         juce::String screenshotView;    // --view top|rear|front
+        bool presentation = false;      // --presentation
         juce::String error;
 
         static CommandLine parse (const juce::StringArray& args);

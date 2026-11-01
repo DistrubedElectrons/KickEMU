@@ -57,6 +57,7 @@ $KickEmu --help
 | `--no-start` | open the window without starting QEMU |
 | `--print-command` | print the QEMU command line and exit |
 | `--view top\|rear\|front` | start in a view |
+| `--presentation` | start in presentation mode |
 | `--screenshot <png>` / `--screenshot-delay <ms>` | save a 2x image of the window and quit |
 
 The UART, MIDI and CV sockets are created by KickEmu before QEMU starts and live as long as

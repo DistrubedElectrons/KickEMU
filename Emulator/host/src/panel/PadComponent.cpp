@@ -108,7 +108,7 @@ namespace kickemu
 
         if (level > 0.0f)
         {
-            rim.draw (g, c.withMultipliedAlpha (0.75f * level));
+            rim.draw (g, c.withMultipliedAlpha (0.5f * level));
             hotEdge.draw (g, c.interpolatedWith (juce::Colours::white, 0.25f).withMultipliedAlpha (level));
         }
     }

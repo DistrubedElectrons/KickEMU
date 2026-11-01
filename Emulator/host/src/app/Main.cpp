@@ -141,6 +141,9 @@ namespace kickemu
             if (cl.screenshotView.isNotEmpty())
                 settings->set ("view", juce::StringArray { "top", "rear", "front" }.indexOf (cl.screenshotView));
             window = std::make_unique<MainWindow> (*session, *settings);
+            if (cl.presentation)
+                if (auto* main = dynamic_cast<MainComponent*> (window->getContentComponent()))
+                    main->setPresentation (true);
             if (cl.screenshot != juce::File())
             {
                 juce::Timer::callAfterDelay (cl.screenshotDelayMs, [this, target = cl.screenshot]
