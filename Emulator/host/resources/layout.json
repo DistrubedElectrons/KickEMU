@@ -1,4 +1,22 @@
 {
+ "theme": {
+  "enclosure": "#1d1e20",
+  "enclosure_edge": "#2a2b2e",
+  "bevel_light": "#55575c",
+  "recess": "#151618",
+  "keycap": "#1a1b1d",
+  "keycap_top": "#26272a",
+  "label_print": "#dcdcdc",
+  "label_off": "#5a5b60",
+  "wordmark": "#e8e8e8",
+  "glass": "#050506",
+  "pad_rubber": "#151517",
+  "metal": "#b9bcc2",
+  "label_font": "DIN Alternate",
+  "key_font": "DIN Alternate",
+  "wordmark_font": "Avenir Next",
+  "heading_font": "Avenir Next"
+ },
  "_comment": "KICK geometry in millimetres. Top view measured on docs/images/kick-front.webp, scaled so the 7-inch panel active area is 154 mm wide; rear on kick-rear.webp; front on views.png. Origin is the top-left corner of each view.",
  "top": {
   "width": 270.0,
@@ -432,7 +450,8 @@
     ],
     "colour": "#3dff9c",
     "key": "SHIFT",
-    "tip": "Shift"
+    "tip": "Shift",
+    "style": "ring"
    },
    {
     "id": "step_seq",
@@ -665,6 +684,12 @@
     "type": "jog",
     "knob": 0,
     "push_hw": 26,
+    "rect": [
+     195.95,
+     174.06,
+     44.21,
+     45.29
+    ],
     "centre": [
      218.06,
      196.6
@@ -873,9 +898,9 @@
     "type": "screen",
     "rect": [
      57.95,
-     20.82,
+     18.99,
      154.75,
-     86.92
+     90.67
     ]
    }
   ],
@@ -1357,19 +1382,6 @@
      136.07,
      23.61,
      57.09
-    ]
-   },
-   {
-    "type": "jog_housing",
-    "rect": [
-     195.95,
-     174.06,
-     44.21,
-     45.29
-    ],
-    "centre": [
-     218.06,
-     196.6
     ]
    },
    {

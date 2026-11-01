@@ -44,14 +44,16 @@
     "use_test_initrd": false
   },
   "panel": {
-    "width": 800,
-    "height": 480
+    "width": 1024,
+    "height": 600
   },
   "midi": {
     "virtual_in_name": "KICK MIDI In",
     "virtual_out_name": "KICK MIDI Out"
   },
   "host": {
+    "autostart": true,
+    "chardev_reconnect_ms": 500,
     "sockets": {
       "mcu": "mcu.sock",
       "uart2": "uart2.sock",
@@ -67,6 +69,8 @@
       "pixels_per_mm_at_100": 3.2,
       "presentation_background": "#0c0c0e",
       "snapshot_scale": 2.0,
+      "snapshot_dir": "~/Pictures/KickEmu",
+      "layout_file": "",
       "keep_screen_pixel_aspect": true,
       "led_fade_ms": 70,
       "blink_period_ms": 500,
@@ -76,6 +80,8 @@
     },
     "mcu": {
       "frame_trailer": [10],
+      "tx_frame_gap_us": 0,
+      "led_radio_groups": [[0, 1, 2, 3, 4, 5, 6, 7], [44, 45, 46]],
       "comm_init_interval_ms": 1000,
       "keepalive_interval_ms": 2000,
       "sw_version": [1, 0],
@@ -95,6 +101,7 @@
     "touch": {
       "max_contacts": 5,
       "abs_max": 32767,
+      "send_abs": true,
       "pinch_modifier": "alt"
     },
     "connect_retry_ms": 300,
@@ -128,8 +135,11 @@
         "emmc_property": "",
         "sd_property": "",
         "serial_order": ["console"],
-        "devices": ["virtio-gpu-pci,xres=800,yres=480", "virtio-multitouch-pci", "virtio-keyboard-pci"],
+        "devices": ["virtio-gpu-pci,xres=1024,yres=600", "virtio-multitouch-pci", "virtio-keyboard-pci"],
         "network": false
+      },
+      "host": {
+        "touch": { "send_abs": false }
       },
       "boot": {
         "firmware": "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
