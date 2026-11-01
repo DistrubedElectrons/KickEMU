@@ -99,6 +99,25 @@ static void test_pmic(void)
     qtest_quit(qts);
 }
 
+static void test_i2c_nack(void)
+{
+    QTestState *qts = qtest_init("-M kick");
+    uint8_t sr;
+
+    /* No device at 0x50: the byte still completes (IIF) with RXAK set */
+    qtest_writeb(qts, I2C1_BASE + I2CR, I2CR_IEN);
+    qtest_writeb(qts, I2C1_BASE + I2CR, I2CR_IEN | I2CR_MSTA | I2CR_MTX);
+    qtest_writeb(qts, I2C1_BASE + I2DR, 0x50 << 1);
+    sr = qtest_readb(qts, I2C1_BASE + I2SR);
+    g_assert_cmphex(sr & (I2SR_IIF | I2SR_RXAK), ==, I2SR_IIF | I2SR_RXAK);
+    qtest_writeb(qts, I2C1_BASE + I2SR, 0);
+    qtest_writeb(qts, I2C1_BASE + I2CR, I2CR_IEN);
+    g_assert_cmphex(qtest_readb(qts, I2C1_BASE + I2SR) & I2SR_IBB, ==, 0);
+    /* The PMIC still answers afterwards */
+    g_assert_cmphex(pmic_read(qts, 0x2f), ==, 0x11);
+    qtest_quit(qts);
+}
+
 static uint16_t mdio(QTestState *qts, int op, int reg, uint16_t data)
 {
     /* clause 22: ST 01, OP, PA 4, RA, TA 10 */
@@ -144,8 +163,8 @@ static void test_machine(void)
     /* On-chip RAM and DDR are memory */
     qtest_writel(qts, OCRAM_BASE, 0xdeadbeef);
     g_assert_cmphex(qtest_readl(qts, OCRAM_BASE), ==, 0xdeadbeef);
-    qtest_writel(qts, RAM_BASE + 1 * 1024 * 1024 * 1024 - 4, 0x12345678);
-    g_assert_cmphex(qtest_readl(qts, RAM_BASE + 1 * 1024 * 1024 * 1024 - 4),
+    qtest_writel(qts, RAM_BASE + 0x40000000ULL - 4, 0x12345678);
+    g_assert_cmphex(qtest_readl(qts, RAM_BASE + 0x40000000ULL - 4),
                     ==, 0x12345678);
     /* UART4: UTS reset value (TXEMPTY | RXEMPTY) */
     g_assert_cmphex(qtest_readl(qts, UART4_BASE + 0xb4) & 0x60, ==, 0x60);
@@ -159,6 +178,7 @@ int main(int argc, char **argv)
     g_test_init(&argc, &argv, NULL);
 
     qtest_add_func("/kick/board/pmic", test_pmic);
+    qtest_add_func("/kick/board/i2c-nack", test_i2c_nack);
     qtest_add_func("/kick/board/enet-phy", test_phy);
     qtest_add_func("/kick/board/machine", test_machine);
 
