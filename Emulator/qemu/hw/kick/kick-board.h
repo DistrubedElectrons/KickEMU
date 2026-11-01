@@ -10,6 +10,10 @@
 #ifndef KICK_BOARD_H
 #define KICK_BOARD_H
 
+/* I2C1_SCL..I2C4_SDA pads as GPIO5_IO14..GPIO5_IO21 (pulled up on the SOM) */
+#define KICK_I2C_GPIO_FIRST         14
+#define KICK_I2C_GPIO_LAST          21
+
 /* SOM devices */
 #define KICK_PMIC_I2C_ADDR          0x4b    /* BD71847 on I2C1 */
 #define KICK_ENET_PHY_ADDR          4       /* AR8033 on the ENET1 MDIO bus */

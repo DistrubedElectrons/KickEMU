@@ -41,6 +41,7 @@
 #include "system/hvf.h"
 #include "system/kvm.h"
 #include "system/qtest.h"
+#include "system/reset.h"
 #include "system/runstate.h"
 #include "system/system.h"
 #include "target/arm/cpu.h"
@@ -201,6 +202,18 @@ static void kick_board_wire_bridge(KickMachineState *s)
     i2c_slave_realize_and_unref(br, kick_i2c_bus(s, 1), &error_fatal);
     qdev_connect_gpio_out(kick_gpio(s, 2), 11,
                           qdev_get_gpio_in_named(DEVICE(br), "enable", 0));
+}
+
+/*
+ * The I2C1..4 SCL/SDA pads double as GPIO5_IO14..21 (SPL and Linux use
+ * them for bus recovery). The SOM pulls the lines up, so read as GPIO the
+ * idle bus is high.
+ */
+static void kick_board_i2c_pullups(KickMachineState *s)
+{
+    for (int pin = KICK_I2C_GPIO_FIRST; pin <= KICK_I2C_GPIO_LAST; pin++) {
+        qemu_set_irq(qdev_get_gpio_in(kick_gpio(s, 5), pin), 1);
+    }
 }
 
 /* BD71847 PMIC on I2C1, INTB (active low) on GPIO2_IO08 */
@@ -449,6 +462,17 @@ static void kick_init(MachineState *machine)
     arm_load_kernel(&s->soc.cpu[0], machine, &s->boot_info);
 }
 
+/*
+ * Board-level state after every system reset: the GPIO models clear their
+ * pad levels when they reset, so pulled-up lines are driven again after
+ * all devices have been reset.
+ */
+static void kick_machine_reset(MachineState *machine, ResetType type)
+{
+    qemu_devices_reset(type);
+    kick_board_i2c_pullups(KICK_MACHINE(machine));
+}
+
 static const char *kick_get_default_cpu_type(const MachineState *ms)
 {
     if (hvf_enabled() || kvm_enabled()) {
@@ -535,6 +559,7 @@ static void kick_class_init(ObjectClass *oc, const void *data)
 
     mc->desc = "Behringer KICK (VAR-SOM-MX8M-MINI, i.MX 8M Mini)";
     mc->init = kick_init;
+    mc->reset = kick_machine_reset;
     mc->max_cpus = FSL_IMX8MM_NUM_CPUS;
     mc->default_cpus = FSL_IMX8MM_NUM_CPUS;
     mc->min_cpus = 1;
