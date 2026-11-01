@@ -1,6 +1,7 @@
 /*
  * i.MX GPIO (IMX8MMRM chapter 8.3): DR 0x00 data, GDIR 0x04 direction
- * (1 = output), PSR 0x08 pad status.
+ * (1 = output), PSR 0x08 pad status. A DR read returns the written value
+ * for outputs and the pad state (PSR) for inputs.
  *
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
@@ -10,7 +11,6 @@
 
 #define GPIO_DR     0x00
 #define GPIO_GDIR   0x04
-#define GPIO_PSR    0x08
 
 static uint32_t gpio_base(int bank)
 {
@@ -35,5 +35,5 @@ void gpio_set_output(int bank, int pin, int value)
 
 int gpio_get(int bank, int pin)
 {
-    return (rd32(gpio_base(bank) + GPIO_PSR) >> pin) & 1;
+    return (rd32(gpio_base(bank) + GPIO_DR) >> pin) & 1;
 }

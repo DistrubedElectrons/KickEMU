@@ -9,7 +9,7 @@
 
 void gpio_set_output(int bank, int pin, int value);
 void gpio_set(int bank, int pin, int value);
-/* Pad state as seen by the PSR (pad status) register */
+/* Line level: output value for outputs, pad state for inputs */
 int gpio_get(int bank, int pin);
 
 #endif
