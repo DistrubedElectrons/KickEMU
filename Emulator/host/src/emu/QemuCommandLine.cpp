@@ -92,6 +92,22 @@ namespace kickemu
         if (cvProperty.isNotEmpty())
             machineProps.add (cvProperty + "=cv");
 
+        // The kick machine defaults to direct kernel boot; U-Boot and BootROM boots are
+        // machine boot modes, the image itself is placed below.
+        const auto bootProperty = config.getString ("qemu.boot_property");
+        if (bootProperty.isNotEmpty() && (boot == "uboot" || boot == "rom"))
+            machineProps.add (bootProperty + "=" + boot);
+
+        // SDMA RAM firmware of the guest rootfs: the machine reads its script table
+        const auto fwProperty = config.getString ("qemu.sdma_firmware_property");
+        if (auto fw = config.getPath ("boot.sdma_firmware"); fwProperty.isNotEmpty() && fw != juce::File())
+        {
+            if (fw.existsAsFile())
+                machineProps.add (fwProperty + "=" + fw.getFullPathName());
+            else
+                cmd.warnings.add ("SDMA firmware not found, UART DMA receive needs it: " + fw.getFullPathName());
+        }
+
         if (auto* extra = config.get ("qemu.machine_properties").getDynamicObject())
             for (auto& p : extra->getProperties())
                 machineProps.add (p.name.toString() + "=" + p.value.toString());

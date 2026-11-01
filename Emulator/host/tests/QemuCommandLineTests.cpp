@@ -80,7 +80,82 @@ public:
             auto cmd = QemuCommandLine::build (c);
             expectEquals (after (cmd.args, "-accel"), juce::String ("tcg"));
             expectEquals (after (cmd.args, "-cpu"), juce::String ("cortex-a53"));
+            expect (after (cmd.args, "-machine").contains ("boot-mode=rom"));
             expect (! cmd.ok());
+        }
+
+        beginTest ("boot=uboot selects the machine boot mode and loads U-Boot");
+        {
+            Config c;
+            c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
+            c.set ("run_dir", tmp.getFullPathName());
+            c.set ("qemu.binary", fakeQemu.getFullPathName());
+            c.set ("qemu.boot", "uboot");
+            c.set ("boot.uboot_image", kernel.getFullPathName());
+            c.set ("storage.emmc_image", emmc.getFullPathName());
+            auto cmd = QemuCommandLine::build (c);
+            expect (cmd.ok(), cmd.error);
+            expect (after (cmd.args, "-machine").contains ("boot-mode=uboot"));
+            expectEquals (after (cmd.args, "-device"),
+                          "loader,file=" + kernel.getFullPathName() + ",addr=0x40200000,cpu-num=0");
+            expect (! cmd.args.contains ("-kernel"));
+        }
+
+        beginTest ("kernel boot leaves the machine default, SDMA firmware is passed when present");
+        {
+            auto fw = tmp.getChildFile ("sdma-imx7d.bin");
+            fw.replaceWithText ("f");
+            Config c;
+            c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
+            c.set ("run_dir", tmp.getFullPathName());
+            c.set ("qemu.binary", fakeQemu.getFullPathName());
+            c.set ("boot.kernel_image", kernel.getFullPathName());
+            c.set ("boot.dtb", dtb.getFullPathName());
+            c.set ("boot.sdma_firmware", fw.getFullPathName());
+            auto cmd = QemuCommandLine::build (c);
+            expect (cmd.ok(), cmd.error);
+            expect (! after (cmd.args, "-machine").contains ("boot-mode="));
+            expect (after (cmd.args, "-machine").contains ("sdma-firmware=" + fw.getFullPathName()));
+
+            c.set ("boot.sdma_firmware", tmp.getChildFile ("missing.bin").getFullPathName());
+            auto missing = QemuCommandLine::build (c);
+            expect (missing.ok(), missing.error);
+            expect (! after (missing.args, "-machine").contains ("sdma-firmware="));
+            expect (missing.warnings.joinIntoString ("\n").contains ("SDMA firmware"));
+        }
+
+        beginTest ("demo profile boots the bare-metal demo without DTB or initrd");
+        {
+            Config c;
+            c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
+            expect (c.applyProfile ("demo").wasOk());
+            c.set ("run_dir", tmp.getFullPathName());
+            c.set ("qemu.binary", fakeQemu.getFullPathName());
+            c.set ("boot.kernel_image", kernel.getFullPathName());
+            auto cmd = QemuCommandLine::build (c);
+            expect (cmd.ok(), cmd.error);
+            expectEquals (after (cmd.args, "-kernel"), kernel.getFullPathName());
+            expect (! cmd.args.contains ("-dtb"));
+            expect (! cmd.args.contains ("-initrd"));
+            expect (! cmd.args.contains ("-append"));
+        }
+
+        beginTest ("selftest profile boots the test initrd and runs kick-selftest");
+        {
+            auto initrd = tmp.getChildFile ("initramfs.cpio.gz");
+            initrd.replaceWithText ("i");
+            Config c;
+            c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
+            expect (c.applyProfile ("selftest").wasOk());
+            c.set ("run_dir", tmp.getFullPathName());
+            c.set ("qemu.binary", fakeQemu.getFullPathName());
+            c.set ("boot.kernel_image", kernel.getFullPathName());
+            c.set ("boot.dtb", dtb.getFullPathName());
+            c.set ("storage.test_initrd", initrd.getFullPathName());
+            auto cmd = QemuCommandLine::build (c);
+            expect (cmd.ok(), cmd.error);
+            expectEquals (after (cmd.args, "-initrd"), initrd.getFullPathName());
+            expect (after (cmd.args, "-append").contains ("kick.selftest=1"));
         }
 
         beginTest ("virt-test profile");
