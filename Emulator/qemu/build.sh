@@ -48,10 +48,17 @@ if [[ ! -L "${tests_link}" ]]; then
     rm -rf "${tests_link}"
     ln -s "${SCRIPT_DIR}/tests" "${tests_link}"
 fi
+# QEMU's qtest meson resolves "<name>.c" inside tests/qtest, so each of our test sources
+# (named kick-*-test.c) is linked there individually. Stale links are removed first.
+find "${QEMU_SRC}/tests/qtest" -maxdepth 1 -name 'kick-*.c' -type l -delete
+for src in "${SCRIPT_DIR}"/tests/kick-*.c; do
+    [[ -e "${src}" ]] || continue
+    ln -s "${src}" "${QEMU_SRC}/tests/qtest/$(basename "${src}")"
+done
 exclude="$(git -C "${QEMU_SRC}" rev-parse --git-path info/exclude)"
 case "${exclude}" in /*) ;; *) exclude="${QEMU_SRC}/${exclude}" ;; esac
 mkdir -p "$(dirname "${exclude}")"
-for p in /hw/kick /tests/qtest/kick; do
+for p in /hw/kick /tests/qtest/kick '/tests/qtest/kick-*.c'; do
     grep -qxF "${p}" "${exclude}" 2>/dev/null || echo "${p}" >> "${exclude}"
 done
 
