@@ -7,6 +7,7 @@ add_executable(KickEmuTests
     LinuxSideParser.cpp
     McuProtocolTests.cpp
     PanelStateTests.cpp
+    LayoutTests.cpp
     QemuCommandLineTests.cpp
     MidiStreamParserTests.cpp
     CvBridgeTests.cpp
