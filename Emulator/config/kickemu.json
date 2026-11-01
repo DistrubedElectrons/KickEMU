@@ -20,7 +20,50 @@
     "kernel_image": "Emulator/out/boot/Image",
     "dtb": "Emulator/out/boot/imx8mm-var-som-symphony.dtb",
     "imx_boot": "Emulator/out/boot/imx-boot",
-    "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw"
+    "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw",
+    "builder": {
+      "image": "kickemu-boot-builder",
+      "base_image": "debian:bullseye",
+      "apt_mirror": "http://archive.debian.org/debian",
+      "apt_security_mirror": "http://archive.debian.org/debian-security",
+      "platform": "linux/arm64",
+      "volume": "kickemu-boot-build",
+      "jobs": 0
+    },
+    "packages": {
+      "gpu_module": "Linux/buildroot/package/freescale-imx/kernel-module-imx-gpu-viv",
+      "imx_mkimage": "Linux/buildroot/package/imx-mkimage",
+      "firmware_imx": "Linux/buildroot/package/freescale-imx/firmware-imx",
+      "genimage": "Linux/buildroot/package/genimage"
+    },
+    "url_rewrites": {
+      "git://github.com/": "https://github.com/",
+      "https://source.codeaurora.org/external/imx/": "https://github.com/nxp-imx/"
+    },
+    "ddr_firmware_dir": "",
+    "emmc": {
+      "genimage_cfg": "Linux/buildroot/board/freescale/imx8mm_var_som/genimage.cfg.emmc.partiton.table",
+      "rootfs_size": "",
+      "rootfs_image": "Emulator/out/testimage/rootfs.ext4"
+    }
+  },
+  "testimage": {
+    "out_dir": "Emulator/out/testimage",
+    "base_image": "alpine:3.22",
+    "platform": "linux/arm64",
+    "packages": [
+      "busybox-static",
+      "evtest",
+      "i2c-tools",
+      "alsa-utils",
+      "mmc-utils",
+      "memtester",
+      "ethtool",
+      "devmem2",
+      "kmod",
+      "libdrm-tests"
+    ],
+    "rootfs_ext4_size": "64M"
   },
   "storage": {
     "emmc_image": "Emulator/out/images/emmc.img",

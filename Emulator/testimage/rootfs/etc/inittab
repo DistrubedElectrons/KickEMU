@@ -1,0 +1,6 @@
+# busybox init configuration of the KICK test image
+::sysinit:/etc/init.d/rcS
+# Debug console (UART4). The leading "-" makes it a login shell.
+ttymxc3::respawn:-/bin/sh
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
