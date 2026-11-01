@@ -91,6 +91,8 @@ add_library(kickemu_core STATIC
     src/emu/MidiStreamParser.cpp
     src/emu/CvBridge.cpp
     src/emu/TerminalModel.cpp
+    src/emu/MidiBridge.cpp
+    src/emu/ConsoleBridge.cpp
     "${KICKEMU_PKTMGR_DIR}/PktMgr.cpp")
 add_dependencies(kickemu_core kickemu_buildinfo)
 target_include_directories(kickemu_core PUBLIC
@@ -130,7 +132,6 @@ target_sources(KickEmu PRIVATE
     src/app/AppSettings.cpp
     src/app/CommandLine.cpp
     src/app/Session.cpp
-    src/app/MidiBridge.cpp
     src/app/MainComponent.cpp
     src/app/TitleBar.cpp
     src/app/SidePanel.cpp
@@ -146,10 +147,9 @@ target_sources(KickEmu PRIVATE
     src/panel/KnobComponent.cpp
     src/panel/JogWheelComponent.cpp
     src/panel/SliderComponent.cpp
-    src/panel/LedComponent.cpp
     src/panel/ScreenComponent.cpp
     src/panel/RearPanel.cpp
-    src/panel/FrontPanel.cpp)
+    src/panel/PanelControl.cpp)
 
 target_compile_definitions(KickEmu PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:KickEmu,JUCE_PRODUCT_NAME>"
