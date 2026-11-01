@@ -764,9 +764,9 @@
     "type": "pot",
     "centre": [
      23.0,
-     42.5
+     44.1
     ],
-    "radius": 8.59,
+    "radius": 6.6,
     "analog": "master",
     "tip": "Master volume (analog, not reported to the guest)"
    },
@@ -775,9 +775,9 @@
     "type": "pot",
     "centre": [
      23.0,
-     75.33
+     75.87
     ],
-    "radius": 8.59,
+    "radius": 6.6,
     "analog": "rec",
     "tip": "Record level (analog, not reported to the guest)"
    },
