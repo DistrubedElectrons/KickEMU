@@ -31,12 +31,20 @@ Emulator/qemu/build.sh            # QEMU with the KICK models, into Emulator/out
 Emulator/boot/build.sh            # kernel, DTBs, galcore, ATF, U-Boot, imx-boot (container)
 Emulator/testimage/build.sh       # test initramfs and ext4 rootfs with kick-selftest
 Emulator/boot/mkimage-emmc.sh     # eMMC image with the KICK partition layout
+
+# Host application (KickEmu) and its tests, into Emulator/out/host
+cmake -S Emulator/host -B Emulator/out/host -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build Emulator/out/host
+ctest --test-dir Emulator/out/host --output-on-failure
+open Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app
 ```
 
-See [boot/README.md](boot/README.md) (including the note on the NXP DDR firmware) and
-[testimage/README.md](testimage/README.md). The device tree checklist for the models is
-[docs/board-dt.md](docs/board-dt.md); the I2C board devices, SAI and SDMA models are described
-in [docs/devices-i2c-audio.md](docs/devices-i2c-audio.md). The host application is added when it lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
+See [boot/README.md](boot/README.md) (including the note on the NXP DDR firmware),
+[testimage/README.md](testimage/README.md) and [host/README.md](host/README.md) (running
+KickEmu, keyboard map, settings). The device tree checklist for the models is
+[docs/board-dt.md](docs/board-dt.md). The models are described in
+[docs/display-gpu.md](docs/display-gpu.md) and [docs/devices-i2c-audio.md](docs/devices-i2c-audio.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the overall design.
 
 ## Configuration
 

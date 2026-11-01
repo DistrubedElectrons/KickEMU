@@ -10,6 +10,16 @@
     "smp": 4,
     "memory_mb": 2048,
     "audiodev": "coreaudio",
+    "audiodev_id": "snd0",
+    "audio_property": "audiodev",
+    "cv_property": "cv-chardev",
+    "emmc_property": "emmc",
+    "sd_property": "sd",
+    "machine_properties": {},
+    "serial_order": ["mcu", "uart2", "midi", "console"],
+    "display": "vnc",
+    "devices": [],
+    "network": true,
     "ssh_host_port": 2222,
     "extra_args": []
   },
@@ -20,6 +30,9 @@
     "kernel_image": "Emulator/out/boot/Image",
     "dtb": "Emulator/out/boot/imx8mm-var-som-symphony.dtb",
     "imx_boot": "Emulator/out/boot/imx-boot",
+    "uboot_image": "Emulator/out/boot/u-boot.bin",
+    "uboot_load_addr": "0x40200000",
+    "firmware": "",
     "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw",
     "builder": {
       "image": "kickemu-boot-builder",
@@ -70,14 +83,110 @@
     "emmc_size": "14G",
     "sd_image": "Emulator/out/images/sd.img",
     "sd_size": "8G",
-    "test_initrd": "Emulator/out/testimage/initramfs.cpio.gz"
+    "test_initrd": "Emulator/out/testimage/initramfs.cpio.gz",
+    "use_test_initrd": false
   },
   "panel": {
-    "width": 800,
-    "height": 480
+    "width": 1024,
+    "height": 600
   },
   "midi": {
     "virtual_in_name": "KICK MIDI In",
     "virtual_out_name": "KICK MIDI Out"
+  },
+  "host": {
+    "autostart": true,
+    "chardev_reconnect_ms": 500,
+    "sockets": {
+      "mcu": "mcu.sock",
+      "uart2": "uart2.sock",
+      "midi": "midi.sock",
+      "console": "console.sock",
+      "qmp": "qmp.sock",
+      "vnc": "vnc.sock",
+      "cv": "cv.sock"
+    },
+    "ui": {
+      "scale_presets": [50, 75, 100, 150],
+      "default_scale": 100,
+      "pixels_per_mm_at_100": 3.2,
+      "presentation_background": "#0c0c0e",
+      "snapshot_scale": 2.0,
+      "snapshot_dir": "~/Pictures/KickEmu",
+      "layout_file": "",
+      "keep_screen_pixel_aspect": true,
+      "led_fade_ms": 70,
+      "blink_period_ms": 500,
+      "log_lines": 5000,
+      "terminal_scrollback": 4000,
+      "terminal_font_size": 12.0
+    },
+    "mcu": {
+      "frame_trailer": [10],
+      "tx_frame_gap_us": 0,
+      "led_radio_groups": [[0, 1, 2, 3, 4, 5, 6, 7], [44, 45, 46]],
+      "comm_init_interval_ms": 1000,
+      "keepalive_interval_ms": 2000,
+      "sw_version": [1, 0],
+      "button_led_colour": "fixed",
+      "jog_ring_default": "connected",
+      "shift_alternates": true,
+      "long_press_ms": 0,
+      "pad_velocity_min": 24,
+      "pad_velocity_max": 127,
+      "aftertouch_interval_ms": 30,
+      "aftertouch_state": 2,
+      "encoder_drag_px_per_step": 6,
+      "jog_drag_degrees_per_step": 15,
+      "wheel_steps_per_notch": 1,
+      "slider_leds": 16
+    },
+    "touch": {
+      "max_contacts": 5,
+      "abs_max": 32767,
+      "send_abs": true,
+      "pinch_modifier": "alt"
+    },
+    "connect_retry_ms": 300,
+    "qemu_quit_timeout_ms": 3000,
+    "cv": {
+      "channels": 8,
+      "full_scale_volts": 5.0,
+      "adc_max": 4095
+    },
+    "pad_palette": [
+      "#94172E", "#7C00F8", "#AB7B00", "#1DF800", "#E4F800", "#22AB00",
+      "#0DF0FF", "#3DAEFF", "#0D34FF", "#FF00E9", "#CC00FF", "#FF89FA",
+      "#FF250D", "#FF730D", "#FFB608", "#000000", "#FFFFFF", "#C2C2C2"
+    ],
+    "keyboard": {
+      "shift": "SHIFT"
+    }
+  },
+  "profiles": {
+    "virt-test": {
+      "_comment": "Stock QEMU virt machine with virtio GPU and multitouch, for testing the display, touch and QMP path before the kick machine is ready.",
+      "qemu": {
+        "binary": "/opt/homebrew/bin/qemu-system-aarch64",
+        "machine": "virt",
+        "boot": "firmware",
+        "cpu": "host",
+        "smp": 2,
+        "memory_mb": 1024,
+        "audiodev": "",
+        "cv_property": "",
+        "emmc_property": "",
+        "sd_property": "",
+        "serial_order": ["console"],
+        "devices": ["virtio-gpu-pci,xres=1024,yres=600", "virtio-multitouch-pci", "virtio-keyboard-pci"],
+        "network": false
+      },
+      "host": {
+        "touch": { "send_abs": false }
+      },
+      "boot": {
+        "firmware": "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+      }
+    }
   }
 }
