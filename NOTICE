@@ -1,0 +1,21 @@
+KickEmu - an emulator of the Behringer KICK (BE 0700-AAM)
+Copyright (c) 2026 Distrubed Electrons
+https://github.com/DistrubedElectrons/KickEMU
+
+KickEmu is licensed under the GNU Affero General Public License, version 3
+or (at your option) any later version. See LICENSE.
+
+Additional term under section 7(b) of the AGPL-3.0:
+
+  Any conveyed copy or modified version of KickEmu, and any user interface
+  of a modified version offered to users over a network, must retain the
+  attribution "KickEmu by Distrubed Electrons" in its documentation (such
+  as a README) and in any "about" or credits notice it displays.
+
+The QEMU device models in Emulator/qemu/hw/kick are additionally licensed
+under the GNU General Public License, version 2 or (at your option) any
+later version, so that they can be combined with QEMU.
+
+The KICK application, audio engine and protocol sources (Kick/, AudIO/,
+ComProtocol/) are Copyright (c) MUSIC Tribe and licensed under
+AGPL-3.0-or-later. Third-party components keep their own licenses.

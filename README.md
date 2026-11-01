@@ -2,7 +2,8 @@
 
 <p align="center">
   <b>A register-level emulator of the Behringer KICK (BE 0700-AAM) for macOS on Apple Silicon.</b><br>
-  Unmodified boot chain, kernel and firmware on an emulated i.MX 8M Mini, with a 1:1 front panel, MIDI and audio.
+  Runs the unmodified boot chain, vendor kernel and the KICK application on an emulated i.MX 8M Mini,<br>
+  with a 1:1 front panel, CoreMIDI, CoreAudio, touch and CV.
 </p>
 
 <p align="center">
@@ -15,7 +16,7 @@
   <img alt="kernel" src="https://img.shields.io/badge/kernel-5.4.127%20(vendor)-555">
   <img alt="qtests" src="https://img.shields.io/badge/qtests-14%20suites-44cc11">
   <img alt="self-test" src="https://img.shields.io/badge/board%20self--test-26%2F28-44cc11">
-  <img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0%20%7C%20GPL--2.0-blue">
+  <a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-AGPL--3.0--or--later-blue"></a>
 </p>
 
 <p align="center">
@@ -65,7 +66,7 @@ connects the emulated MIDI, audio and CV ports to the host.
 | Control surface MCU (UART1, PktMgr protocol) | Emulated in KickEmu: pads, buttons, encoders, jog, slider, all LEDs |
 | MIDI (UART3) | CoreMIDI bridge |
 | UARTs (own model: FIFOs, line timing, ageing/idle) over SDMA | 20 KB round trips exact on the MCU and MIDI ports, no NXP firmware needed |
-| Booting the KICK application image | Next |
+| KICK application (KT_Kick) on Debian 12 (`--profile kick-app`) | Runs with screen, touch, MCU link, audio and network; app screen after about 17 s under HVF |
 
 Open items are listed in [Emulator/docs/soc.md](Emulator/docs/soc.md#known-gaps).
 
@@ -76,7 +77,7 @@ Requirements: macOS on Apple Silicon, Xcode command line tools, CMake, Ninja, Me
 (OrbStack or Docker).
 
 ```sh
-git clone --recursive git@github.com:DatanoiseTV/kickemu.git && cd kickemu
+git clone --recursive https://github.com/DistrubedElectrons/KickEMU.git && cd KickEMU
 
 Emulator/qemu/build.sh                                   # QEMU with the kick machine
 cmake -S Emulator/demo/baremetal -B Emulator/out/demo -G Ninja && cmake --build Emulator/out/demo
@@ -87,9 +88,16 @@ KICKEMU=Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app/Contents/MacOS/K
 $KICKEMU --profile demo --presentation                   # bare-metal demo, no Linux needed
 ```
 
-For Linux: `Emulator/boot/build.sh` builds the vendor kernel, DTBs, U-Boot and ATF,
-`Emulator/testimage/build.sh` the test image, then `$KICKEMU --profile selftest`.
-The full build guide is in [Emulator/README.md](Emulator/README.md).
+Linux and the KICK application:
+
+```sh
+Emulator/boot/build.sh                                   # vendor kernel, DTBs, U-Boot, ATF (container)
+Emulator/testimage/build.sh && $KICKEMU --profile selftest   # Alpine test image + board self-test
+Emulator/rootfs/build.sh && $KICKEMU --profile kick-app      # Debian 12 with KT_Kick
+```
+
+The full build guide is in [Emulator/README.md](Emulator/README.md), the root file system
+for the app in [Emulator/rootfs/README.md](Emulator/rootfs/README.md).
 
 | Shortcut | Action |
 |---|---|
@@ -121,15 +129,34 @@ The full build guide is in [Emulator/README.md](Emulator/README.md).
 | [Emulator/host](Emulator/host) | KickEmu: panel, launcher, MCU, MIDI, CV and console bridges |
 | [Emulator/boot](Emulator/boot) | Container build of kernel, DTBs, GPU module, ATF, U-Boot, imx-boot |
 | [Emulator/testimage](Emulator/testimage) | Alpine test image with `kick-selftest` |
+| [Emulator/rootfs](Emulator/rootfs) | Debian 12 root file system with the KICK application |
 | [Emulator/demo/baremetal](Emulator/demo/baremetal) | Bare-metal demo and reference for own firmware |
 | [Emulator/docs](Emulator/docs) | Architecture, SoC, display/GPU and device model notes |
 | [README.KICK.md](README.KICK.md) | The original KICK source tree (application, audio engine, Linux) |
 
+## Contributing
+
+Issues and pull requests are welcome. Before opening a pull request, run the host tests
+(`ctest --test-dir Emulator/out/host --output-on-failure`) and the `kick-*` qtests from
+[Emulator/qemu/tests](Emulator/qemu/tests). Contributions to the QEMU models stay under
+GPL-2.0-or-later so they can be built into QEMU.
+
 ## License
 
-Built on the KICK source released by Music Tribe under AGPL-3.0-or-later. The emulator is
-AGPL-3.0-or-later; the QEMU models in `Emulator/qemu/hw/kick` are GPL-2.0-or-later so they
-can be built into QEMU. JUCE is used under its AGPLv3 option. NXP firmware (DDR training,
-SDMA RAM scripts) is not included.
+Copyright (c) 2026 Distrubed Electrons.
 
-KickEmu is an independent project and is not affiliated with or endorsed by Music Tribe.
+KickEmu is free software under the [GNU Affero General Public License v3.0 or later](LICENSE).
+You may use, study, modify and redistribute it. If you distribute a modified version, or run
+one as a network service, you must publish its complete source under the same license, keep
+the copyright notices, and credit **Distrubed Electrons** as the original author of KickEmu
+(an additional term under AGPL-3.0 section 7(b), see [NOTICE](NOTICE)).
+
+- The QEMU models in `Emulator/qemu/hw/kick` are additionally available under
+  GPL-2.0-or-later, so they can be built into QEMU.
+- The KICK source (`Kick/`, `AudIO/`, `ComProtocol/`) was released by MUSIC Tribe under
+  AGPL-3.0-or-later; `Linux/` is Buildroot, GPL-2.0. See [README.KICK.md](README.KICK.md).
+- JUCE is used under its AGPLv3 option; QEMU is GPL-2.0.
+- NXP firmware (DDR training, SDMA RAM scripts) is not included.
+
+KickEmu is an independent project and is not affiliated with or endorsed by MUSIC Tribe.
+Behringer and KICK are trademarks of MUSIC Tribe.
