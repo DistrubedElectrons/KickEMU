@@ -29,7 +29,9 @@ apk info -v --root "${ROOT}" 2>/dev/null | sort > /out/manifest.txt
 # for example) are kept because "--install" does not overwrite.
 mkdir -p "${ROOT}/bin" "${ROOT}/sbin" "${ROOT}/usr/bin" "${ROOT}/usr/sbin"
 ln -sf busybox.static "${ROOT}/bin/busybox"
-chroot "${ROOT}" /bin/busybox --install -s
+for applet in $(chroot "${ROOT}" /bin/busybox.static --list-full); do
+    [ -e "${ROOT}/${applet}" ] || [ -L "${ROOT}/${applet}" ] || ln -s /bin/busybox "${ROOT}/${applet}"
+done
 ln -sf sbin/init "${ROOT}/init"
 
 # Trim what a test image never needs.
