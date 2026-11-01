@@ -38,7 +38,8 @@
  *    the buffer to the FIFO register, per access width;
  *  - peripheral to memory: on each DMA request read watermark bytes;
  *  - UART receive: read URXD while CHARRDY is set, up to the watermark;
- *    fewer characters (aging/idle) close the buffer early;
+ *    a request from the UART ageing timer or idle detect drains the FIFO,
+ *    closes the buffer early and clears USR1.AGTIM / USR2.IDLE;
  *  - ap_2_ap: copy count bytes from buffer to extended buffer address.
  * A completed BD gets DONE cleared (and its count set to the received byte
  * count for peripheral to memory); BD_INTR raises the channel bit in INTR;
@@ -141,9 +142,16 @@
 #define C0_SETCTX           0x07
 #define C0_GETCTX           0x03
 
-/* UART receive data register bits seen by uart_2_mcu */
+/*
+ * UART registers seen by uart_2_mcu, relative to the URXD address the
+ * driver passes as the peripheral address
+ */
+#define UART_USR1           0x94
+#define UART_USR2           0x98
 #define URXD_CHARRDY        BIT(15)
 #define URXD_ERR            BIT(14)
+#define USR1_AGTIM          BIT(8)
+#define USR2_IDLE           BIT(12)
 
 typedef enum {
     SCRIPT_NONE,
@@ -596,7 +604,7 @@ static void sdma_per_burst(IMXSDMAState *s, int ch)
     if (!sdma_fetch_bd(s, ch, &bd)) {
         return;
     }
-    width = kind == SCRIPT_UART_2_MCU ? 1 : sdma_access_width(bd.command);
+    width = sdma_access_width(bd.command);
     burst = MAX(wml, width);
 
     while (done < burst && c->bd_bytes < bd.count) {
@@ -606,33 +614,90 @@ static void sdma_per_burst(IMXSDMAState *s, int ch)
         if (kind == SCRIPT_MCU_2_PER) {
             dma_memory_read(s->dma_as, mem, &v, width, MEMTXATTRS_UNSPECIFIED);
             sdma_stl(s, per, le32_to_cpu(v));
-        } else if (kind == SCRIPT_PER_2_MCU) {
+        } else {
             v = cpu_to_le32(sdma_ldl(s, per));
             dma_memory_write(s->dma_as, mem, &v, width, MEMTXATTRS_UNSPECIFIED);
-        } else {
-            /* UART: one character per URXD read while data is ready */
-            uint32_t rx = sdma_ldl(s, per);
-            uint8_t ch8 = rx & 0xff;
-
-            if (!(rx & URXD_CHARRDY)) {
-                break;
-            }
-            if (rx & URXD_ERR) {
-                bd.status |= BD_RROR;
-            }
-            dma_memory_write(s->dma_as, mem, &ch8, 1, MEMTXATTRS_UNSPECIFIED);
         }
         c->bd_bytes += width;
         done += width;
     }
 
-    if (c->bd_bytes >= bd.count ||
-        (kind == SCRIPT_UART_2_MCU && done < burst && c->bd_bytes)) {
+    if (c->bd_bytes >= bd.count) {
         if (kind != SCRIPT_MCU_2_PER) {
             /* Peripheral to memory reports the received byte count */
             bd.count = MIN(c->bd_bytes, bd.count);
         }
         sdma_complete_bd(s, ch, &bd);
+    }
+}
+
+/*
+ * uart_2_mcu / uartsh_2_mcu, one DMA request. The UART raises its RX
+ * request for RRDY (RX FIFO at RXTL), for the ageing timer (AGTIM) or for
+ * idle detect (IDLE):
+ *  - RRDY: read watermark characters from URXD, continuing in the next BD
+ *    when one fills up;
+ *  - AGTIM or IDLE: the line went quiet, drain the FIFO, close the current
+ *    BD with the number of bytes received so far (the driver takes the
+ *    count from the BD) and clear the flag in the UART so the request
+ *    drops. The next characters go to the next BD.
+ * A character with URXD.ERR (overrun, frame error, break) marks the BD
+ * with BD_RROR. If the next BD still belongs to the CPU the script waits,
+ * leaving the flags set so the request stays asserted.
+ */
+static void sdma_uart_2_mcu(IMXSDMAState *s, int ch)
+{
+    IMXSDMAChannel *c = &s->chan[ch];
+    uint32_t per = sdma_ctx_greg(s, ch, 6);
+    uint32_t wml = MAX(sdma_ctx_greg(s, ch, 7) & 0xffff, 1);
+    uint32_t usr1 = sdma_ldl(s, per + UART_USR1);
+    uint32_t usr2 = sdma_ldl(s, per + UART_USR2);
+    bool flush = (usr1 & USR1_AGTIM) || (usr2 & USR2_IDLE);
+    uint32_t done = 0;
+    int guard;
+
+    for (guard = 0; guard < 65536; guard++) {
+        bool empty = false;
+        SDMABD bd;
+
+        if (!sdma_fetch_bd(s, ch, &bd)) {
+            return;
+        }
+        while (c->bd_bytes < bd.count && (flush || done < wml)) {
+            uint32_t rx = sdma_ldl(s, per);
+            uint8_t ch8 = rx & 0xff;
+
+            if (!(rx & URXD_CHARRDY)) {
+                empty = true;
+                break;
+            }
+            if (rx & URXD_ERR) {
+                bd.status |= BD_RROR;
+                sdma_write_bd_mode(s, &bd);
+            }
+            dma_memory_write(s->dma_as, bd.buf + c->bd_bytes, &ch8, 1,
+                             MEMTXATTRS_UNSPECIFIED);
+            c->bd_bytes++;
+            done++;
+        }
+        if (c->bd_bytes < bd.count && !(flush && empty)) {
+            /* Burst done, the BD stays open for the next request */
+            return;
+        }
+        if (c->bd_bytes) {
+            /* Full, or closed early by ageing/idle: report the count */
+            bd.count = c->bd_bytes;
+            if (!sdma_complete_bd(s, ch, &bd)) {
+                break;
+            }
+        }
+        if (empty || (!flush && done >= wml)) {
+            break;
+        }
+    }
+    if (flush) {
+        sdma_stl(s, per + UART_USR1, usr1 & USR1_AGTIM);
+        sdma_stl(s, per + UART_USR2, usr2 & USR2_IDLE);
     }
 }
 
@@ -651,8 +716,10 @@ static void sdma_step(IMXSDMAState *s, int ch)
         break;
     case SCRIPT_PER_2_MCU:
     case SCRIPT_MCU_2_PER:
-    case SCRIPT_UART_2_MCU:
         sdma_per_burst(s, ch);
+        break;
+    case SCRIPT_UART_2_MCU:
+        sdma_uart_2_mcu(s, ch);
         break;
     default:
         sdma_script_error(s, ch);
