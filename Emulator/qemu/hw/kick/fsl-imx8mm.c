@@ -686,8 +686,13 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
      * emulation (boot=rom) fills; OCRAM, OCRAM_S, the M4 TCMs and the CAAM
      * secure RAM are plain RAM.
      */
+    /*
+     * One ROM region spans the ROM and its protected last 4 KiB, so the
+     * mapping stays 16 KiB aligned (HVF maps memory in host pages).
+     */
     if (!memory_region_init_rom(&s->boot_rom, OBJECT(s), "imx8mm.boot-rom",
-                                fsl_imx8mm_memmap[FSL_IMX8MM_BOOT_ROM].size,
+                                fsl_imx8mm_memmap[FSL_IMX8MM_BOOT_ROM].size +
+                                fsl_imx8mm_memmap[FSL_IMX8MM_BOOT_ROM_PROTECTED].size,
                                 errp)) {
         return;
     }
@@ -715,6 +720,7 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
     for (int i = 0; i < FSL_IMX8MM_NUM_MEMORY_REGIONS; i++) {
         switch (i) {
         case FSL_IMX8MM_BOOT_ROM:
+        case FSL_IMX8MM_BOOT_ROM_PROTECTED:
         case FSL_IMX8MM_CAAM_MEM:
         case FSL_IMX8MM_OCRAM_S:
         case FSL_IMX8MM_TCM_ITCM:
