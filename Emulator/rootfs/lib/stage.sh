@@ -47,6 +47,7 @@ stage_rootfs() {
         -e "AUTHORIZED_KEYS=${keys}" \
         -e "CONSOLE_TTY=$(cfg '.rootfs.console_tty')" \
         -e "CONSOLE_AUTOLOGIN=$(cfg '.rootfs.console_autologin' false)" \
+        -e "CONSOLE_LOGLEVEL=$(cfg '.rootfs.console_loglevel')" \
         -e "BOARD_FILES=$(cfg_list '.rootfs.board_overlay_files')" \
         -e "X_DISPLAY=$(cfg '.rootfs.x.display')" \
         -e "X_VT=$(cfg '.rootfs.x.vt')" \

@@ -15,6 +15,7 @@ set -euo pipefail
 log() { echo "[rootfs] $*" >&2; }
 
 : "${PACKAGES:?}" "${KERNEL_RELEASE:?}" "${KICK_HOSTNAME:?}" "${CONSOLE_TTY:?}" "${APP_PACKAGE:?}"
+: "${CONSOLE_LOGLEVEL:?}"
 : "${X_DISPLAY:?}" "${X_VT:?}" "${X_FBDEV:?}" "${X_FB_KERNEL:?}" "${X_TOUCH_PRODUCT:?}"
 export DEBIAN_FRONTEND=noninteractive
 
@@ -92,6 +93,11 @@ cat > /etc/default/kick-x <<EOF
 KICK_X_DISPLAY=${X_DISPLAY}
 KICK_X_VT=${X_VT}
 KICK_X_ARGS=${X_ARGS}
+EOF
+# Console log level: driver messages from interrupt context (SAI xruns) are written to the
+# serial console synchronously and slow the whole system down while they last.
+cat > /etc/sysctl.d/10-kick-console.conf <<EOF
+kernel.printk = ${CONSOLE_LOGLEVEL} 4 1 7
 EOF
 mkdir -p /etc/X11/xorg.conf.d
 sed -e "s|@FBDEV@|${X_FBDEV}|" -e "s|@TOUCH_PRODUCT@|${X_TOUCH_PRODUCT}|" \
