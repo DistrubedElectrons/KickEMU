@@ -78,7 +78,10 @@ OBJECT_DECLARE_SIMPLE_TYPE(BD71847State, BD71847)
  * constraints of imx8mm-var-som.dtsi:
  *   BUCK1 (VDD_SOC) 0x14 = 0.90 V, BUCK2 (VDD_ARM) 0x1e = 1.00 V
  *   (DVS bucks: 0.70 V + code * 10 mV)
- *   BUCK3..6, LDO1..6 enabled with their OTP default code.
+ *   BUCK3 0.70 V, BUCK4 3.3 V, BUCK5 1.80 V, BUCK6 1.10 V,
+ *   LDO1 1.8 V, LDO2 0.9 V, LDO3 1.8 V, LDO4 0.9 V, LDO5 1.8 V, LDO6 0.9 V,
+ *   all enabled. A voltage outside the DT range would make Linux try to
+ *   change an enabled LDO, which the bd718x7 driver refuses.
  */
 static const uint8_t bd71847_reset_regs[][2] = {
     { 0x02, 0x4b },     /* I2C_DEV: own address */
@@ -97,7 +100,7 @@ static const uint8_t bd71847_reset_regs[][2] = {
     { 0x15, 0x03 },     /* BUCK4_VOLT */
     { 0x16, 0x03 },     /* BUCK5_VOLT */
     { 0x17, 0x1e },     /* BUCK6_VOLT */
-    { 0x18, 0x40 },     /* LDO1: enabled */
+    { 0x18, 0x62 },     /* LDO1: enabled, low range, 1.8 V */
     { 0x19, 0x40 },     /* LDO2 */
     { 0x1a, 0x40 },     /* LDO3 */
     { 0x1b, 0x40 },     /* LDO4 */
