@@ -2,6 +2,20 @@
 #
 # Peripheral models go into system_ss, the SoC and board into arm_common_ss.
 # Keep one line per model and keep the list sorted to make merges trivial.
+arm_common_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('fsl-imx8mm.c'))
+arm_common_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_src.c'))
+arm_common_ss.add(when: 'CONFIG_KICK', if_true: files('kick-board.c'))
+arm_common_ss.add(when: 'CONFIG_KICK', if_true: files('kick-bootrom.c'))
+system_ss.add(when: 'CONFIG_AR8033_PHY', if_true: files('ar8033_phy.c'))
+system_ss.add(when: 'CONFIG_BD71847', if_true: files('bd71847.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_anatop.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_ccm.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_gpc.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_iomuxc.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_ocotp.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_snvs.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_sysctr.c'))
+system_ss.add(when: 'CONFIG_FSL_IMX8MM', if_true: files('imx8mm_tmu.c'))
 system_ss.add(when: 'CONFIG_IMX8MM_DISPMIX', if_true: files('imx8mm_dispmix.c'))
 system_ss.add(when: 'CONFIG_IMX8MM_LCDIF', if_true: files('imx8mm_lcdif.c'))
 system_ss.add(when: 'CONFIG_IMX8MM_MIPI_DSIM', if_true: files('imx8mm_mipi_dsim.c'))

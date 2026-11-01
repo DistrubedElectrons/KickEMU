@@ -1,5 +1,26 @@
 # KICK (BE 0700-AAM) SoC, board and device models.
 
+config AR8033_PHY
+    bool
+
+config BD71847
+    bool
+    depends on I2C
+
+config FSL_IMX8MM
+    bool
+    imply I2C_DEVICES
+    select AR8033_PHY
+    select ARM_GIC
+    select BD71847
+    select IMX
+    select IMX_FEC
+    select IMX_I2C
+    select OR_IRQ
+    select SDHCI
+    select UNIMP
+    select WDT_IMX2
+
 config IMX8MM_DISPMIX
     bool
 
@@ -9,6 +30,12 @@ config IMX8MM_LCDIF
 
 config IMX8MM_MIPI_DSIM
     bool
+
+config KICK
+    bool
+    default y
+    depends on AARCH64
+    select FSL_IMX8MM
 
 config KICK_AD5675R
     bool
