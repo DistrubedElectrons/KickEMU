@@ -378,6 +378,7 @@ static void sai_start_stop(IMX8MMSAIState *s)
             x->t0_ns = now;
             x->frames_done = 0;
             x->word = 0;
+            x->stall_ns = 0;
             sai_open_voice(s, d);
         } else if (!run && x->running) {
             x->running = false;
@@ -534,45 +535,52 @@ static bool sai_rx_frame(IMX8MMSAIState *s, bool allow_overflow)
 
 /*
  * Frame engine. Frames that are due according to the virtual clock are
- * processed. When a FIFO runs dry (TX) or full (RX) while its DMA request is
- * asserted, the rest of the batch is deferred to an immediate re-run so the
- * DMA engine, which runs from a bottom half, can service the request; if it
- * still has not by then, the underrun/overflow happens as on hardware.
+ * processed in batches of tick-us. When a FIFO runs dry (TX) or full (RX)
+ * while its DMA request is asserted, the rest of the batch waits so the DMA
+ * engine, which runs from a bottom half (and may itself wait for the guest
+ * to hand back a buffer descriptor), can service the request. The hardware
+ * FIFO hides that much latency on a real bus, so the wait is bounded by one
+ * batch period: a DMA that is still behind after that is late, and the
+ * underrun/overflow happens as on hardware.
  */
 static void sai_tick(void *opaque)
 {
     IMX8MMSAIState *s = opaque;
     int64_t now = qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+    int64_t period = (int64_t)s->tick_us * SCALE_US;
     bool defer = false;
     int d;
 
     for (d = 0; d < 2; d++) {
         IMX8MMSAIDir *x = &s->dir[d];
         uint64_t due;
-        bool progress = false;
 
         if (!x->running) {
             continue;
         }
         due = muldiv64(now - x->t0_ns, x->rate, NANOSECONDS_PER_SECOND);
         while (x->frames_done < due) {
-            bool waiting_dma = s->dma_level[d];
-            bool ok = d == IMX8MM_SAI_TX ? sai_tx_frame(s, !waiting_dma ||
-                                                         !progress)
-                                         : sai_rx_frame(s, !waiting_dma ||
-                                                         !progress);
+            bool late = !s->dma_level[d] ||
+                        (x->stall_ns && now - x->stall_ns >= period);
+            bool ok = d == IMX8MM_SAI_TX ? sai_tx_frame(s, late)
+                                         : sai_rx_frame(s, late);
 
             if (!ok) {
+                if (!x->stall_ns) {
+                    x->stall_ns = now;
+                }
                 defer = true;
                 break;
             }
+            x->stall_ns = 0;
             x->frames_done++;
-            progress = true;
             sai_update(s);
         }
     }
     sai_update(s);
-    sai_schedule_tick(s, defer ? now : now + (int64_t)s->tick_us * SCALE_US);
+    /* While stalled, look again soon instead of spinning on the main loop */
+    sai_schedule_tick(s, now + (defer ? MAX(period / 8, 10 * SCALE_US)
+                                      : period));
 }
 
 static void sai_audio_out_cb(void *opaque, int avail)

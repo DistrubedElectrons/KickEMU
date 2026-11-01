@@ -44,6 +44,7 @@ typedef struct IMX8MMSAIDir {
     int64_t t0_ns;
     uint64_t frames_done;
     uint32_t word;              /* next word index within the frame */
+    int64_t stall_ns;           /* FIFO waiting for the DMA since, or 0 */
 
     /* Host audio ring (interleaved int32 stereo or mono) */
     int32_t *ring;
