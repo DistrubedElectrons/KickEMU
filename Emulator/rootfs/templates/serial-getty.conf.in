@@ -1,0 +1,4 @@
+# Serial console on the KICK's debug UART (Emulator/rootfs/build.sh, .rootfs.console_autologin).
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty -o '-p -f -- \\u' --keep-baud @AUTOLOGIN@ 115200,57600,38400,9600 - $TERM
