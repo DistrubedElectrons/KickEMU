@@ -250,10 +250,11 @@ to host pages; the fault handler already works per host page.
   512 MiB DRAM; it expects its PHY at MDIO address 0.
 - SDMA RAM scripts: the model runs script semantics, not the SDMA ISA. With the RAM firmware
   (the KICK rootfs ships `firmware-imx`) the 5.4 driver takes every entry point from the
-  firmware header, and `uart_2_mcu` has no ROM entry in that kernel, so UART receive DMA
-  (MCU on ttymxc0, MIDI on ttymxc2) only works with `sdma-firmware` naming the same file.
-  The firmware is not shipped (NXP EULA). Without it the test image falls back to ROM scripts:
-  UART TX DMA and SAI audio work, UART RX DMA does not.
+  firmware header, and `uart_2_mcu` has no ROM entry in that kernel. Script inference
+  (`sdma-infer-scripts`, on by default) picks the semantics from the channel's events and FIFO
+  address, so UART and SAI DMA work with or without the firmware; `sdma-firmware` gives the
+  exact entry points instead. The firmware is not shipped (NXP EULA). Peripherals other than
+  UART and SAI at an unknown entry point (e.g. `mcu_2_ecspi`) still end with BD_RROR.
 
 ## Tests
 
