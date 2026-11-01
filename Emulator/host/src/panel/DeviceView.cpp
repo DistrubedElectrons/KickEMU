@@ -94,6 +94,14 @@ namespace kickemu
         resized();
     }
 
+    double DeviceView::fitAspect() const
+    {
+        if (scalePercent > 0 || view != View::top)
+            return 0.0;
+        auto mm = top->getSizeMm();
+        return mm.getHeight() > 0.0f ? (double) mm.getWidth() / (double) mm.getHeight() : 0.0;
+    }
+
     juce::Rectangle<int> DeviceView::preferredSize (int percent) const
     {
         const float s = pixelsPerMmAt100 * (float) percent / 100.0f;

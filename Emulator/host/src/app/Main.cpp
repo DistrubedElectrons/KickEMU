@@ -13,6 +13,28 @@
 
 namespace kickemu
 {
+    /** Keeps the device area at its aspect ratio while the user resizes the window. */
+    class DeviceFitConstrainer : public juce::ComponentBoundsConstrainer
+    {
+    public:
+        WindowFit fit;
+
+        void checkBounds (juce::Rectangle<int>& bounds, const juce::Rectangle<int>& previous,
+                          const juce::Rectangle<int>& limits, bool top, bool left, bool bottom, bool right) override
+        {
+            if (fit.isActive())
+            {
+                int edges = WindowFit::none;
+                if (top) edges |= WindowFit::top;
+                if (left) edges |= WindowFit::left;
+                if (bottom) edges |= WindowFit::bottom;
+                if (right) edges |= WindowFit::right;
+                bounds = fit.constrain (bounds, edges);
+            }
+            ComponentBoundsConstrainer::checkBounds (bounds, previous, limits, top, left, bottom, right);
+        }
+    };
+
     class MainWindow : public juce::DocumentWindow
     {
     public:
@@ -23,17 +45,32 @@ namespace kickemu
             auto* content = new MainComponent (session, settings);
             content->onRequestSize = [this] (int w, int h)
             {
+                constrainer.fit = {};   // a fixed scale sizes the window itself
                 if (! isFullScreen())
                     setSize (w, h);
             };
+            content->onWindowFitChanged = [this, content] { applyFit (content->getWindowFit()); };
             setContentOwned (content, false);
+            constrainer.setMinimumSize (480, 400);
+            setConstrainer (&constrainer);
             setResizable (true, false);
-            setResizeLimits (480, 400, 10000, 10000);
 
             auto state = settings.getString ("windowState");
             if (state.isEmpty() || ! restoreWindowStateFromString (state))
                 centreWithSize (1180, 1000);
             setVisible (true);
+            applyFit (content->getWindowFit());
+        }
+
+        /** Locks the window to the device shape (or releases it) and reshapes it once. */
+        void applyFit (const WindowFit& fit)
+        {
+            constrainer.fit = fit;
+            if (! fit.isActive() || isFullScreen() || isMinimised())
+                return;
+            const auto* display = juce::Desktop::getInstance().getDisplays().getDisplayForRect (getScreenBounds());
+            if (display != nullptr)
+                setBounds (fit.snap (getBounds(), display->userArea));
         }
 
         ~MainWindow() override
@@ -46,6 +83,7 @@ namespace kickemu
 
     private:
         AppSettings& settings;
+        DeviceFitConstrainer constrainer;
     };
 
     class KickEmuApplication : public juce::JUCEApplication

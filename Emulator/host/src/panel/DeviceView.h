@@ -25,6 +25,10 @@ namespace kickemu
         void setScalePercent (int percent);
         int getScalePercent() const { return scalePercent; }
 
+        /** Width / height of the top view in Fit mode, 0 when the window should stay free
+            (fixed scale, or the long rear/front strips). */
+        double fitAspect() const;
+
         /** Size the view needs at a fixed percentage (used to size the window). */
         juce::Rectangle<int> preferredSize (int percent) const;
 

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "config/WindowFit.h"
+
 #include "app/AppSettings.h"
 #include "app/Session.h"
 #include "app/SidePanel.h"
@@ -41,6 +43,12 @@ namespace kickemu
 
         /** Asks the window to resize so the device fits a scale preset. */
         std::function<void (int width, int height)> onRequestSize;
+
+        /** Window shape that shows the device without bars (inactive unless Fit and top view). */
+        WindowFit getWindowFit() const;
+
+        /** Called when that shape changes: Fit chosen, view, presentation or side panel toggled. */
+        std::function<void()> onWindowFitChanged;
 
         void setPresentation (bool on);
         bool isPresentation() const { return presentation; }

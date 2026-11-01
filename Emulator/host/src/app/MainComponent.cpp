@@ -106,6 +106,8 @@ namespace kickemu
         {
             device->setView ((DeviceView::View) i);
             settings.set ("view", i);
+            if (onWindowFitChanged)
+                onWindowFitChanged();
         };
         titleBar.power.onClick = [this]
         {
@@ -156,12 +158,27 @@ namespace kickemu
         juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
     }
 
+    WindowFit MainComponent::getWindowFit() const
+    {
+        WindowFit fit;
+        fit.aspect = device->fitAspect();
+        if (! presentation)
+        {
+            // Must match layoutChildren(): side panel, 8 px margin, title bar and status line
+            fit.chromeWidth = (sideOpen ? sideWidth : 0) + 16;
+            fit.chromeHeight = titleHeight + statusHeight + 16;
+        }
+        return fit;
+    }
+
     void MainComponent::applyScaleSelection (int itemId)
     {
         settings.set ("scale", itemId);
         if (itemId == fitItemId)
         {
             device->setScalePercent (0);
+            if (onWindowFitChanged)
+                onWindowFitChanged();
             return;
         }
         // A fixed scale: grow or shrink the window around the device.
@@ -170,6 +187,8 @@ namespace kickemu
         if (onRequestSize)
             onRequestSize (size.getWidth() + (sideOpen ? sideWidth : 0), size.getHeight() + titleHeight + statusHeight);
         device->setScalePercent (itemId);
+        if (onWindowFitChanged)
+            onWindowFitChanged();   // releases the aspect lock
     }
 
     void MainComponent::paint (juce::Graphics& g)
@@ -242,12 +261,16 @@ namespace kickemu
             sideFraction = sideTarget;
             layoutChildren();
         }
+        if (onWindowFitChanged)
+            onWindowFitChanged();
     }
 
     void MainComponent::setPresentation (bool on)
     {
         presentation = on;
         layoutChildren();
+        if (onWindowFitChanged)
+            onWindowFitChanged();
         repaint();
         device->grabKeyboardFocus();
         if (on)
@@ -291,6 +314,8 @@ namespace kickemu
                 titleBar.views.setSelected (code - '1');
                 device->setView ((DeviceView::View) (code - '1'));
                 settings.set ("view", code - '1');
+                if (onWindowFitChanged)
+                    onWindowFitChanged();
                 return true;
             }
             if (code == juce::KeyPress::escapeKey && presentation) { setPresentation (false); return true; }
