@@ -13,6 +13,10 @@ config KICK_IMX8MM_SAI
 config KICK_IMX_SDMA
     bool
 
+config KICK_PCA9534
+    bool
+    select I2C
+
 config KICK_PCF85263
     bool
     select I2C
@@ -26,4 +30,5 @@ config KICK_PERIPH_TEST
     select KICK_GOODIX_GT911
     select KICK_IMX8MM_SAI
     select KICK_IMX_SDMA
+    select KICK_PCA9534
     select KICK_PCF85263

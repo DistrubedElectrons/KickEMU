@@ -7,8 +7,9 @@
  * boot anything: its single Cortex-A53 only provides the address space
  * qtest accesses go through and starts powered off. The wiring mirrors what the kick board does:
  *
- *   I2C3  0x30a40000  bus "i2c-bus.0"  (GT911 0x14, PCF85263 0x68)
- *   I2C4  0x30a50000  bus "i2c-bus.1"  (CV/Gate DAC 0x0c)
+ *   I2C2  0x30a30000  bus "i2c-bus.0"  (PCA9534 0x20)
+ *   I2C3  0x30a40000  bus "i2c-bus.1"  (GT911 0x14, PCF85263 0x68)
+ *   I2C4  0x30a50000  bus "i2c-bus.2"  (CV/Gate DAC 0x0c)
  *   SAI2  0x30020000  dma-rx -> SDMA2 event 2, dma-tx -> SDMA2 event 3
  *   SDMA2 0x302c0000  bus master on system memory
  *   RAM   0x40000000
@@ -35,6 +36,7 @@
 #include "imx_sdma.h"
 
 /* i.MX 8M Mini memory map (RM "System Memory Map") */
+#define KPT_I2C2_BASE       0x30a30000
 #define KPT_I2C3_BASE       0x30a40000
 #define KPT_I2C4_BASE       0x30a50000
 #define KPT_SAI2_BASE       0x30020000
@@ -50,8 +52,9 @@
 
 static void kick_periph_test_init(MachineState *machine)
 {
-    static const hwaddr i2c_base[] = { KPT_I2C3_BASE, KPT_I2C4_BASE };
-    static const char *const i2c_name[] = { "i2c3", "i2c4" };
+    static const hwaddr i2c_base[] = { KPT_I2C2_BASE, KPT_I2C3_BASE,
+                                       KPT_I2C4_BASE };
+    static const char *const i2c_name[] = { "i2c2", "i2c3", "i2c4" };
     DeviceState *sai, *sdma;
     Object *cpu;
     unsigned i;

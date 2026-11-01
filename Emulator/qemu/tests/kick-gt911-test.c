@@ -35,7 +35,7 @@ typedef struct {
 static void fixture_init(Fixture *f, const char *extra)
 {
     f->qts = qtest_initf("-M kick-periph-test -device goodix-gt911,id=ts,"
-                         "bus=i2c-bus.0,address=0x%x%s", GT911_ADDR,
+                         "bus=i2c-bus.1,address=0x%x%s", GT911_ADDR,
                          extra ? extra : "");
     imx_i2c_init(&f->i2c, f->qts, I2C3_BASE);
 }
