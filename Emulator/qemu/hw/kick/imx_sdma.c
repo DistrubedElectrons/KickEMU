@@ -1055,7 +1055,7 @@ static const VMStateDescription vmstate_sdma = {
 };
 
 static const Property sdma_properties[] = {
-    DEFINE_PROP_LINK("memory", IMXSDMAState, dma_mr, TYPE_MEMORY_REGION,
+    DEFINE_PROP_LINK("dma-mr", IMXSDMAState, dma_mr, TYPE_MEMORY_REGION,
                      MemoryRegion *),
     /* Internal RAM size, starting at data memory 0x800 */
     DEFINE_PROP_UINT32("ram-size", IMXSDMAState, ram_size, 16 * KiB),

@@ -79,7 +79,7 @@ static void kick_periph_test_init(MachineState *machine)
 
     sdma = qdev_new(TYPE_IMX_SDMA);
     object_property_add_child(OBJECT(machine), "sdma2", OBJECT(sdma));
-    object_property_set_link(OBJECT(sdma), "memory",
+    object_property_set_link(OBJECT(sdma), "dma-mr",
                              OBJECT(get_system_memory()), &error_fatal);
     sysbus_realize_and_unref(SYS_BUS_DEVICE(sdma), &error_fatal);
     sysbus_mmio_map(SYS_BUS_DEVICE(sdma), 0, KPT_SDMA2_BASE);

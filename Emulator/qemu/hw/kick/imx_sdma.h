@@ -11,7 +11,7 @@
 #include "hw/core/sysbus.h"
 #include "qom/object.h"
 
-#define TYPE_IMX_SDMA "imx-sdma"
+#define TYPE_IMX_SDMA "imx8mm-sdma"
 OBJECT_DECLARE_SIMPLE_TYPE(IMXSDMAState, IMX_SDMA)
 
 #define IMX_SDMA_MMIO_SIZE      0x10000
@@ -41,7 +41,7 @@ struct IMXSDMAState {
     qemu_irq irq;
     QEMUBH *bh;
     QEMUTimer *poll_timer;
-    MemoryRegion *dma_mr;       /* "memory" link: bus master view */
+    MemoryRegion *dma_mr;       /* "dma-mr" link: bus master view */
     AddressSpace *dma_as;
 
     /* Properties */
