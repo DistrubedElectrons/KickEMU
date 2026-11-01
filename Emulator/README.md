@@ -3,8 +3,9 @@
 A register-level emulator of the Behringer KICK (BE 0700-AAM) for developing and testing
 the boot chain, kernel drivers, the KICK firmware and custom firmware on a computer.
 
-Status: **in development, phase 1 (hardware layer)**. Nothing in this folder is ready to
-boot a KICK firmware image yet.
+Status: **0.1, hardware layer working**. The vendor kernel 5.4.127 boots to a shell under
+HVF in about 1.5 s and passes the board self-test; the bare-metal demo drives the screen and
+the front panel. Booting the KICK application image is the next phase.
 
 ## How it works
 
