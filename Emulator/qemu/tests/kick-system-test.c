@@ -62,12 +62,14 @@ static void test_gpc(void)
 
     /* Peripheral domains start powered down (PGSR bit 0) */
     g_assert_cmphex(qtest_readl(qts, GPC_BASE + dispmix_pgc + 0xc), ==, 1);
-    /* Power-up request with PCR set completes and self-clears */
-    qtest_writel(qts, GPC_BASE + dispmix_pgc, 1);
+    /* Power-up request (PCR clear, as ATF does) completes and self-clears */
     qtest_writel(qts, GPC_BASE + 0xf8, 1u << 10);
     g_assert_cmphex(qtest_readl(qts, GPC_BASE + 0xf8), ==, 0);
     g_assert_cmphex(qtest_readl(qts, GPC_BASE + dispmix_pgc + 0xc), ==, 0);
-    /* Power down again */
+    /* Power down is ignored unless PCR allows it */
+    qtest_writel(qts, GPC_BASE + 0x104, 1u << 10);
+    g_assert_cmphex(qtest_readl(qts, GPC_BASE + dispmix_pgc + 0xc), ==, 0);
+    qtest_writel(qts, GPC_BASE + dispmix_pgc, 1);
     qtest_writel(qts, GPC_BASE + 0x104, 1u << 10);
     g_assert_cmphex(qtest_readl(qts, GPC_BASE + 0x104), ==, 0);
     g_assert_cmphex(qtest_readl(qts, GPC_BASE + dispmix_pgc + 0xc), ==, 1);

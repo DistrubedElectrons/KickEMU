@@ -65,8 +65,12 @@ static void imx8mm_gpc_pu_trigger(IMX8MMGPCState *s, uint32_t req, bool down)
     for (int n = 0; n < GPC_NUM_PU_DOMAINS; n++) {
         hwaddr pgc = GPC_PGC_PU_BASE + n * 0x40;
 
-        /* A domain only switches when its PGC control bit (PCR) is set */
-        if ((req & BIT(n)) && (s->regs[R(pgc)] & 1)) {
+        /*
+         * PGC PCR = 1 allows the domain to be switched off; a power-up
+         * request is honoured either way (ATF clears PCR before powering
+         * up and sets it before powering down).
+         */
+        if ((req & BIT(n)) && (!down || (s->regs[R(pgc)] & 1))) {
             imx8mm_gpc_set_pgc_state(s, pgc, down);
         }
     }
