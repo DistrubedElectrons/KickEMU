@@ -71,6 +71,13 @@ while IFS= read -r f; do
     mkdir -p "/$(dirname "${f}")"
     cp -P "/board/${f}" "/${f}"
 done <<<"${BOARD_FILES}"
+# The board overlay keeps .wants entries as copies of the unit; systemd ignores those
+# ("is not a symlink, ignoring"), so the storage partition would never be mounted.
+find /etc/systemd/system -path '*.wants/*' -type f | while IFS= read -r w; do
+    unit="/etc/systemd/system/$(basename "${w}")"
+    [[ -f "${unit}" ]] || continue
+    ln -sf "${unit}" "${w}"
+done
 [[ -f /usr/bin/kt_kick.sh ]] && chmod 0755 /usr/bin/kt_kick.sh
 [[ -f /usr/bin/kick-storage-mkfs ]] && chmod 0755 /usr/bin/kick-storage-mkfs
 
