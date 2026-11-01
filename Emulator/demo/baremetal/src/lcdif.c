@@ -95,13 +95,13 @@ void lcdif_start(const lcdif_mode *m, uint32_t fb_addr)
 
     /*
      * Clocks: DISP_AXI and DISP_APB from SYS_PLL2_1000M / SYS_PLL1_800M,
-     * pixel clock from VIDEO_PLL1 (594 MHz) / 3 / 7 = 28.3 MHz, close to
-     * the 29.2 MHz an 800x480 panel needs for 60 Hz with these porches.
+     * pixel clock from VIDEO_PLL1 (594 MHz) / 3 / 6 = 33 MHz, the clock-frequency
+     * of the KICK 1024x600 LVDS panel in the board device tree.
      */
     clock_gate(CCGR_DISPMIX, 1);
     clock_root(ROOT_DISP_AXI, 1, 1, 2);
     clock_root(ROOT_DISP_APB, 1, 1, 4);
-    clock_root(ROOT_LCDIF_PIXEL, 1, 3, 7);
+    clock_root(ROOT_LCDIF_PIXEL, 1, 3, 6);
 
     /* Display block control: clocks on, then out of soft reset */
     wr32(DISPMIX_BASE + 0x4, 0x1fff);

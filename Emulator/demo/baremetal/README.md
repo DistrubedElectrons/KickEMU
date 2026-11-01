@@ -21,9 +21,9 @@ What it does:
   `COMM_INIT` handshake, a rainbow wave across the 4x4 pads, a chase over the key LEDs, the
   jog ring spinning (emulator LED ids 56-61), the LINK LEDs counting beats (62-65) and a
   slider level sweep. A pad hit reported by the MCU flashes that pad.
-- Powers the display mix through the GPC, clocks and starts the eLCDIF and draws an
-  800x480 screen: the KICK wordmark wiping in, then live system facts, counters, the last
-  pad hit and a mirror of the pad colours.
+- Powers the display mix through the GPC, clocks and starts the eLCDIF and draws the
+  1024x600 screen of the KICK LVDS panel (the layout scales to other sizes): the KICK
+  wordmark wiping in, then live system facts, counters, the last pad hit and a mirror of the pad colours.
 
 ## Layout
 

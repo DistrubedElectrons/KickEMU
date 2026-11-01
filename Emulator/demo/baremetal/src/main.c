@@ -34,7 +34,7 @@
 #define BRIDGE_EN_BANK      2
 #define BRIDGE_EN_PIN       11
 
-/* Panel timing: 800x480, porches as in the VAR-SOM LVDS display timings */
+/* Panel timing: 1024x600 at 33 MHz, porches from the KICK board device tree */
 static const lcdif_mode panel_mode = {
     .hactive = KICK_FB_WIDTH, .hfp = 40, .hsync = 48, .hbp = 40,
     .vactive = KICK_FB_HEIGHT, .vfp = 13, .vsync = 3, .vbp = 29,
