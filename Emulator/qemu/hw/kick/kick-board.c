@@ -32,7 +32,7 @@
 #include "hw/core/boards.h"
 #include "hw/core/loader.h"
 #include "hw/core/qdev-properties.h"
-#include "hw/gpio/pca9554.h"
+#include "pca9534.h"
 #include "sn65dsi83.h"
 #include "hw/i2c/i2c.h"
 #include "hw/sd/sd.h"
@@ -82,6 +82,7 @@ struct KickMachineState {
     uint32_t pwrkey_press_ms;
     uint32_t panel_width;
     uint32_t panel_height;
+    bool gt911_reset_wired;
     char *rom_boot_device;
 };
 
@@ -119,8 +120,16 @@ static void kick_board_wire_gt911(KickMachineState *s)
                                 qdev_get_gpio_in(kick_gpio(s, 5), 4));
     qdev_connect_gpio_out(kick_gpio(s, 5), 4,
                           qdev_get_gpio_in_named(dev, "int-sense", 0));
-    qdev_connect_gpio_out(kick_gpio(s, 5), 3,
-                          qdev_get_gpio_in_named(dev, "reset", 0));
+    /*
+     * The DT declares reset-gpios GPIO5_IO03 GPIO_ACTIVE_LOW, so goodix_reset()
+     * ends with the pin driven low. A GT911 whose RSTB sat on that pin would
+     * stay in reset, yet touch works on the device: the line does not reset
+     * the controller on the KICK. It is only connected on request.
+     */
+    if (s->gt911_reset_wired) {
+        qdev_connect_gpio_out(kick_gpio(s, 5), 3,
+                              qdev_get_gpio_in_named(dev, "reset", 0));
+    }
 }
 
 /* NXP PCF85263 RTC on I2C3 at 0x68 (no interrupt routed in the DT) */
@@ -166,13 +175,17 @@ static void kick_board_setup_sai2(KickMachineState *s)
 
 /*
  * NXP PCA9534 GPIO expander on I2C2 at 0x20 (gpio-keys Back/Home/Menu on
- * pins 1..3, hogs on 4..7). QEMU's PCA9554 has the same register set; it
- * has no INT output, so key changes are seen when Linux reads the port.
+ * pins 1..3, hogs on 4..7). Its open-drain INT goes to GPIO1_IO07, which
+ * the DT uses as a falling-edge interrupt.
  */
 static void kick_board_wire_expander(KickMachineState *s)
 {
-    i2c_slave_create_simple(kick_i2c_bus(s, 2), TYPE_PCA9554,
-                            KICK_PCA9534_I2C_ADDR);
+    DeviceState *dev;
+
+    dev = DEVICE(i2c_slave_create_simple(kick_i2c_bus(s, 2), TYPE_PCA9534,
+                                         KICK_PCA9534_I2C_ADDR));
+    qdev_connect_gpio_out_named(dev, PCA9534_GPIO_INT, 0,
+                                qdev_get_gpio_in(kick_gpio(s, 1), 7));
 }
 
 /*
@@ -474,6 +487,16 @@ KICK_INT_PROP(pwrkey_press_ms, uint32)
 KICK_INT_PROP(panel_width, uint32)
 KICK_INT_PROP(panel_height, uint32)
 
+static bool kick_get_gt911_reset_wired(Object *obj, Error **errp)
+{
+    return KICK_MACHINE(obj)->gt911_reset_wired;
+}
+
+static void kick_set_gt911_reset_wired(Object *obj, bool v, Error **errp)
+{
+    KICK_MACHINE(obj)->gt911_reset_wired = v;
+}
+
 static void kick_instance_init(Object *obj)
 {
     KickMachineState *s = KICK_MACHINE(obj);
@@ -558,6 +581,11 @@ static void kick_class_init(ObjectClass *oc, const void *data)
                               NULL, NULL);
     object_class_property_set_description(oc, "panel-height",
         "LCDIF scan-out height before the guest sets a mode");
+    object_class_property_add_bool(oc, "gt911-reset-wired",
+                                   kick_get_gt911_reset_wired,
+                                   kick_set_gt911_reset_wired);
+    object_class_property_set_description(oc, "gt911-reset-wired",
+        "Connect GPIO5_IO03 to the GT911 RSTB input");
     /* "audiodev" (the generic machine property) feeds SAI2 */
     machine_add_audiodev_property(mc);
     object_class_property_add_str(oc, "rom-boot-device",

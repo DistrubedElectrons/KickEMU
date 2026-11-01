@@ -40,7 +40,12 @@ config KICK
     default y
     depends on AARCH64
     select FSL_IMX8MM
-    select PCA9554
+    select KICK_AD5675R
+    select KICK_GOODIX_GT911
+    select KICK_IMX8MM_SAI
+    select KICK_IMX_SDMA
+    select KICK_PCA9534
+    select KICK_PCF85263
     select SN65DSI83
 
 config KICK_AD5675R
