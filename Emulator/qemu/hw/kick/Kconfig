@@ -1,1 +1,29 @@
 # KICK (BE 0700-AAM) SoC, board and device models.
+config KICK_AD5675R
+    bool
+    select I2C
+
+config KICK_GOODIX_GT911
+    bool
+    select I2C
+
+config KICK_IMX8MM_SAI
+    bool
+
+config KICK_IMX_SDMA
+    bool
+
+config KICK_PCF85263
+    bool
+    select I2C
+
+config KICK_PERIPH_TEST
+    bool
+    default y
+    depends on AARCH64
+    select IMX_I2C
+    select KICK_AD5675R
+    select KICK_GOODIX_GT911
+    select KICK_IMX8MM_SAI
+    select KICK_IMX_SDMA
+    select KICK_PCF85263
