@@ -1,0 +1,8 @@
+[submodule "Emulator/third_party/qemu"]
+	path = Emulator/third_party/qemu
+	url = https://gitlab.com/qemu-project/qemu.git
+	shallow = true
+[submodule "Emulator/third_party/JUCE"]
+	path = Emulator/third_party/JUCE
+	url = https://github.com/juce-framework/JUCE.git
+	shallow = true

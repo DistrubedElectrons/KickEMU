@@ -1,0 +1,23 @@
+diff --git a/hw/Kconfig b/hw/Kconfig
+index b3ed092..d8da607 100644
+--- a/hw/Kconfig
++++ b/hw/Kconfig
+@@ -51,6 +51,7 @@ source watchdog/Kconfig
+ 
+ # arch Kconfig
+ source arm/Kconfig
++source kick/Kconfig
+ source cpu/Kconfig
+ source alpha/Kconfig
+ source avr/Kconfig
+diff --git a/hw/meson.build b/hw/meson.build
+index ef65ba5..b94b301 100644
+--- a/hw/meson.build
++++ b/hw/meson.build
+@@ -70,3 +70,6 @@ subdir('vmapple')
+ subdir('watchdog')
+ subdir('xen')
+ subdir('fsi')
++
++# KICK (BE 0700-AAM) emulator models, linked in from Emulator/qemu/hw/kick
++subdir('kick')

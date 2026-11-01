@@ -1,0 +1,14 @@
+diff --git a/tests/qtest/meson.build b/tests/qtest/meson.build
+index 3dea609..e8b3c8d 100644
+--- a/tests/qtest/meson.build
++++ b/tests/qtest/meson.build
+@@ -418,6 +418,9 @@ if dbus_display
+   qtests += {'dbus-display-test': [dbus_display1, gio]}
+ endif
+ 
++# KICK (BE 0700-AAM) qtests, linked in from Emulator/qemu/tests
++subdir('kick')
++
+ qtest_executables = {}
+ foreach dir : target_dirs
+   if not dir.endswith('-softmmu')

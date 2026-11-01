@@ -1,0 +1,1825 @@
+{
+ "theme": {
+  "enclosure": "#1d1e20",
+  "enclosure_edge": "#2a2b2e",
+  "bevel_light": "#55575c",
+  "recess": "#151618",
+  "keycap": "#1a1b1d",
+  "keycap_top": "#26272a",
+  "label_print": "#dcdcdc",
+  "label_off": "#7a7b80",
+  "wordmark": "#e8e8e8",
+  "glass": "#050506",
+  "pad_rubber": "#101012",
+  "metal": "#b9bcc2",
+  "label_font": "DIN Alternate",
+  "key_font": "DIN Alternate",
+  "wordmark_font": "Avenir Next",
+  "heading_font": "Avenir Next"
+ },
+ "_comment": "KICK geometry in millimetres. Top view measured on docs/images/kick-front.webp, scaled so the 7-inch panel active area is 154 mm wide; rear on kick-rear.webp; front on views.png. Origin is the top-left corner of each view.",
+ "top": {
+  "width": 270.0,
+  "height": 270.0,
+  "corner_radius": 3.0,
+  "bevel": 1.93,
+  "controls": [
+   {
+    "id": "pad1",
+    "type": "pad",
+    "index": 0,
+    "hw": 0,
+    "rect": [
+     39.28,
+     230.94,
+     26.18,
+     25.76
+    ],
+    "key": "Z"
+   },
+   {
+    "id": "pad2",
+    "type": "pad",
+    "index": 1,
+    "hw": 1,
+    "rect": [
+     71.47,
+     230.94,
+     26.18,
+     25.76
+    ],
+    "key": "X"
+   },
+   {
+    "id": "pad3",
+    "type": "pad",
+    "index": 2,
+    "hw": 2,
+    "rect": [
+     103.66,
+     230.94,
+     26.18,
+     25.76
+    ],
+    "key": "C"
+   },
+   {
+    "id": "pad4",
+    "type": "pad",
+    "index": 3,
+    "hw": 3,
+    "rect": [
+     135.86,
+     230.94,
+     26.18,
+     25.76
+    ],
+    "key": "V"
+   },
+   {
+    "id": "pad5",
+    "type": "pad",
+    "index": 4,
+    "hw": 4,
+    "rect": [
+     39.28,
+     199.17,
+     26.18,
+     25.76
+    ],
+    "key": "A"
+   },
+   {
+    "id": "pad6",
+    "type": "pad",
+    "index": 5,
+    "hw": 5,
+    "rect": [
+     71.47,
+     199.17,
+     26.18,
+     25.76
+    ],
+    "key": "S"
+   },
+   {
+    "id": "pad7",
+    "type": "pad",
+    "index": 6,
+    "hw": 6,
+    "rect": [
+     103.66,
+     199.17,
+     26.18,
+     25.76
+    ],
+    "key": "D"
+   },
+   {
+    "id": "pad8",
+    "type": "pad",
+    "index": 7,
+    "hw": 7,
+    "rect": [
+     135.86,
+     199.17,
+     26.18,
+     25.76
+    ],
+    "key": "F"
+   },
+   {
+    "id": "pad9",
+    "type": "pad",
+    "index": 8,
+    "hw": 8,
+    "rect": [
+     39.28,
+     167.19,
+     26.18,
+     25.76
+    ],
+    "key": "Q"
+   },
+   {
+    "id": "pad10",
+    "type": "pad",
+    "index": 9,
+    "hw": 9,
+    "rect": [
+     71.47,
+     167.19,
+     26.18,
+     25.76
+    ],
+    "key": "W"
+   },
+   {
+    "id": "pad11",
+    "type": "pad",
+    "index": 10,
+    "hw": 10,
+    "rect": [
+     103.66,
+     167.19,
+     26.18,
+     25.76
+    ],
+    "key": "E"
+   },
+   {
+    "id": "pad12",
+    "type": "pad",
+    "index": 11,
+    "hw": 11,
+    "rect": [
+     135.86,
+     167.19,
+     26.18,
+     25.76
+    ],
+    "key": "R"
+   },
+   {
+    "id": "pad13",
+    "type": "pad",
+    "index": 12,
+    "hw": 12,
+    "rect": [
+     39.28,
+     135.21,
+     26.18,
+     25.76
+    ],
+    "key": "1"
+   },
+   {
+    "id": "pad14",
+    "type": "pad",
+    "index": 13,
+    "hw": 13,
+    "rect": [
+     71.47,
+     135.21,
+     26.18,
+     25.76
+    ],
+    "key": "2"
+   },
+   {
+    "id": "pad15",
+    "type": "pad",
+    "index": 14,
+    "hw": 14,
+    "rect": [
+     103.66,
+     135.21,
+     26.18,
+     25.76
+    ],
+    "key": "3"
+   },
+   {
+    "id": "pad16",
+    "type": "pad",
+    "index": 15,
+    "hw": 15,
+    "rect": [
+     135.86,
+     135.21,
+     26.18,
+     25.76
+    ],
+    "key": "4"
+   },
+   {
+    "id": "bank_a",
+    "type": "button",
+    "hw": 0,
+    "led": 0,
+    "label": "A",
+    "rect": [
+     172.56,
+     134.79,
+     14.59,
+     9.44
+    ],
+    "colour": "#36c8ff",
+    "shift_hw": 4,
+    "key": "F1",
+    "tip": "Bank A (Shift: E)"
+   },
+   {
+    "id": "bank_b",
+    "type": "button",
+    "hw": 1,
+    "led": 1,
+    "label": "B",
+    "rect": [
+     197.89,
+     134.79,
+     14.59,
+     9.44
+    ],
+    "colour": "#ff5a5f",
+    "shift_hw": 5,
+    "key": "F2",
+    "tip": "Bank B (Shift: F)"
+   },
+   {
+    "id": "bank_c",
+    "type": "button",
+    "hw": 2,
+    "led": 2,
+    "label": "C",
+    "rect": [
+     223.21,
+     134.79,
+     14.59,
+     9.44
+    ],
+    "colour": "#33b4ff",
+    "shift_hw": 6,
+    "key": "F3",
+    "tip": "Bank C (Shift: G)"
+   },
+   {
+    "id": "bank_d",
+    "type": "button",
+    "hw": 3,
+    "led": 3,
+    "label": "D",
+    "rect": [
+     248.54,
+     134.79,
+     14.59,
+     9.44
+    ],
+    "colour": "#ff5f45",
+    "shift_hw": 7,
+    "key": "F4",
+    "tip": "Bank D (Shift: H)"
+   },
+   {
+    "id": "main",
+    "type": "button",
+    "hw": 8,
+    "led": 8,
+    "label": "MAIN",
+    "rect": [
+     172.99,
+     157.32,
+     14.17,
+     9.87
+    ],
+    "colour": "#2ec4ff",
+    "shift_hw": 9,
+    "key": "T",
+    "tip": "Main (Shift: Grid)"
+   },
+   {
+    "id": "browse",
+    "type": "button",
+    "hw": 10,
+    "led": 10,
+    "label": "BROWSE",
+    "rect": [
+     191.88,
+     157.32,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff3fc4",
+    "shift_hw": 11,
+    "key": "Y",
+    "tip": "Browse (Shift: Save)"
+   },
+   {
+    "id": "track_mix",
+    "type": "button",
+    "hw": 12,
+    "led": 12,
+    "label": "TRACK\nMIX",
+    "rect": [
+     210.76,
+     157.32,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff6ccf",
+    "shift_hw": 13,
+    "key": "U",
+    "tip": "Track mix (Shift: Pad mix)"
+   },
+   {
+    "id": "track_mute",
+    "type": "button",
+    "hw": 14,
+    "led": 14,
+    "label": "TRACK\nMUTE",
+    "rect": [
+     229.86,
+     157.32,
+     14.17,
+     9.87
+    ],
+    "colour": "#3fe2ff",
+    "shift_hw": 15,
+    "key": "I",
+    "tip": "Track mute (Shift: Pad mute)"
+   },
+   {
+    "id": "next_seq",
+    "type": "button",
+    "hw": 16,
+    "led": 16,
+    "label": "NEXT\nSEC",
+    "rect": [
+     248.97,
+     157.32,
+     14.17,
+     9.87
+    ],
+    "colour": "#3fd6ff",
+    "shift_hw": 17,
+    "key": "O",
+    "tip": "Next sequence (Shift: FX)"
+   },
+   {
+    "id": "tap_tempo",
+    "type": "button",
+    "hw": 18,
+    "led": 18,
+    "label": "TAP\nTEMPO",
+    "rect": [
+     172.99,
+     180.29,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff52d6",
+    "shift_hw": 19,
+    "key": "F5",
+    "tip": "Tap tempo (Shift: Master)"
+   },
+   {
+    "id": "note_repeat",
+    "type": "button",
+    "hw": 24,
+    "led": 24,
+    "label": "NOTE\nREPEAT",
+    "rect": [
+     172.99,
+     203.47,
+     14.17,
+     9.87
+    ],
+    "colour": "#3a8cff",
+    "shift_hw": 25,
+    "key": "F6",
+    "tip": "Note repeat (Shift: Latch)"
+   },
+   {
+    "id": "menu",
+    "type": "button",
+    "hw": 22,
+    "led": 22,
+    "label": "MENU",
+    "rect": [
+     249.18,
+     180.29,
+     14.17,
+     9.87
+    ],
+    "colour": "#33ffb4",
+    "shift_hw": 23,
+    "key": "F7",
+    "tip": "Menu (Shift: Prefs)"
+   },
+   {
+    "id": "shift",
+    "type": "button",
+    "hw": 31,
+    "led": 31,
+    "label": "SHIFT",
+    "rect": [
+     248.75,
+     201.75,
+     14.59,
+     12.88
+    ],
+    "colour": "#3dff9c",
+    "key": "SHIFT",
+    "tip": "Shift",
+    "style": "ring"
+   },
+   {
+    "id": "step_seq",
+    "type": "button",
+    "hw": 32,
+    "led": 32,
+    "label": "STEP\nSEQ",
+    "rect": [
+     173.2,
+     226.43,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff58e0",
+    "shift_hw": 33,
+    "key": "G",
+    "tip": "Step sequencer (Shift: Automation)"
+   },
+   {
+    "id": "tc",
+    "type": "button",
+    "hw": 34,
+    "led": 34,
+    "label": "TC",
+    "rect": [
+     192.09,
+     226.43,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff45b4",
+    "shift_hw": 35,
+    "key": "H",
+    "tip": "TC (Shift: On/Off)"
+   },
+   {
+    "id": "sampler",
+    "type": "button",
+    "hw": 36,
+    "led": 36,
+    "label": "SAMPLER",
+    "rect": [
+     211.19,
+     226.43,
+     14.17,
+     9.87
+    ],
+    "colour": "#4070ff",
+    "shift_hw": 37,
+    "key": "J",
+    "tip": "Sampler (Shift: Loop)"
+   },
+   {
+    "id": "sample_edit",
+    "type": "button",
+    "hw": 38,
+    "led": 38,
+    "label": "SAMPLE\nEDIT",
+    "rect": [
+     230.29,
+     226.43,
+     14.17,
+     9.87
+    ],
+    "colour": "#ff55f0",
+    "shift_hw": 39,
+    "key": "K",
+    "tip": "Sample edit (Shift: Link edit)"
+   },
+   {
+    "id": "prog_edit",
+    "type": "button",
+    "hw": 40,
+    "led": 40,
+    "label": "PROG\nEDIT",
+    "rect": [
+     249.4,
+     226.43,
+     14.17,
+     9.87
+    ],
+    "colour": "#33e6ff",
+    "shift_hw": 41,
+    "key": "L",
+    "tip": "Program edit (Shift: MIDI control)"
+   },
+   {
+    "id": "full_level",
+    "type": "button",
+    "hw": 48,
+    "led": 48,
+    "label": "FULL\nLEVEL",
+    "rect": [
+     10.95,
+     204.54,
+     15.02,
+     10.3
+    ],
+    "colour": "#ff5cd8",
+    "shift_hw": 49,
+    "key": "F8",
+    "tip": "Full level (Shift: Half level)"
+   },
+   {
+    "id": "levels16",
+    "type": "button",
+    "hw": 50,
+    "led": 50,
+    "label": "16\nLEVELS",
+    "rect": [
+     10.95,
+     227.72,
+     15.02,
+     10.3
+    ],
+    "colour": "#ff52e2",
+    "shift_hw": 51,
+    "key": "F9",
+    "tip": "16 levels (Shift: Notes)"
+   },
+   {
+    "id": "erase",
+    "type": "button",
+    "hw": 52,
+    "led": 52,
+    "label": "ERASE",
+    "rect": [
+     10.95,
+     251.11,
+     15.02,
+     9.87
+    ],
+    "colour": "#ff5cc8",
+    "key": "F10",
+    "tip": "Erase"
+   },
+   {
+    "id": "link",
+    "type": "button",
+    "hw": 47,
+    "led": 47,
+    "label": "LINK",
+    "rect": [
+     16.31,
+     105.38,
+     15.45,
+     9.87
+    ],
+    "colour": "#2f9bff",
+    "key": "P",
+    "tip": "Link"
+   },
+   {
+    "id": "record",
+    "type": "round_button",
+    "hw": 42,
+    "led": 42,
+    "icon": "record",
+    "centre": [
+     180.29,
+     253.9
+    ],
+    "radius": 6.65,
+    "colour": "#ff2b2b",
+    "key": "F12",
+    "tip": "Record"
+   },
+   {
+    "id": "overdub",
+    "type": "round_button",
+    "hw": 43,
+    "led": 43,
+    "icon": "mic",
+    "centre": [
+     199.39,
+     253.9
+    ],
+    "radius": 6.65,
+    "colour": "#f2fff0",
+    "key": "F11",
+    "tip": "Overdub"
+   },
+   {
+    "id": "stop",
+    "type": "round_button",
+    "hw": 44,
+    "led": 44,
+    "icon": "stop",
+    "centre": [
+     218.49,
+     253.9
+    ],
+    "radius": 6.65,
+    "colour": "#ff9a1f",
+    "key": "ESCAPE",
+    "tip": "Stop"
+   },
+   {
+    "id": "play",
+    "type": "round_button",
+    "hw": 45,
+    "led": 45,
+    "icon": "play",
+    "centre": [
+     237.81,
+     253.9
+    ],
+    "radius": 6.65,
+    "colour": "#2bff6b",
+    "key": "SPACE",
+    "tip": "Play"
+   },
+   {
+    "id": "play_start",
+    "type": "round_button",
+    "hw": 46,
+    "led": 46,
+    "icon": "playpause",
+    "centre": [
+     256.69,
+     253.9
+    ],
+    "radius": 6.65,
+    "colour": "#2b9bff",
+    "key": "/",
+    "tip": "Play from start"
+   },
+   {
+    "id": "jog",
+    "type": "jog",
+    "knob": 0,
+    "push_hw": 26,
+    "rect": [
+     195.95,
+     174.06,
+     44.21,
+     45.29
+    ],
+    "centre": [
+     218.06,
+     196.6
+    ],
+    "radius": 10.09,
+    "ring_radius": 12.23,
+    "ring_width": 1.5,
+    "ring_leds": [
+     56,
+     57,
+     58,
+     59,
+     60,
+     61
+    ],
+    "ring_colour": "#ff1a1a",
+    "key_ccw": "UP",
+    "key_cw": "DOWN",
+    "key_push": "RETURN",
+    "tip": "Jog wheel: drag or scroll to turn, click to push"
+   },
+   {
+    "id": "undo",
+    "type": "jog_key",
+    "hw": 29,
+    "icon": "undo",
+    "quadrant": [
+     -1,
+     -1
+    ],
+    "key": "BACKSPACE",
+    "tip": "Undo"
+   },
+   {
+    "id": "copy",
+    "type": "jog_key",
+    "hw": 20,
+    "icon": "copy",
+    "quadrant": [
+     1,
+     -1
+    ],
+    "key": "\\",
+    "tip": "Copy"
+   },
+   {
+    "id": "minus",
+    "type": "jog_key",
+    "hw": 27,
+    "icon": "minus",
+    "quadrant": [
+     -1,
+     1
+    ],
+    "key": "-",
+    "tip": "Minus"
+   },
+   {
+    "id": "plus",
+    "type": "jog_key",
+    "hw": 21,
+    "icon": "plus",
+    "quadrant": [
+     1,
+     1
+    ],
+    "key": "=",
+    "tip": "Plus"
+   },
+   {
+    "id": "master",
+    "type": "pot",
+    "centre": [
+     23.0,
+     44.1
+    ],
+    "radius": 6.6,
+    "analog": "master",
+    "tip": "Master volume (analog, not reported to the guest)"
+   },
+   {
+    "id": "rec",
+    "type": "pot",
+    "centre": [
+     23.0,
+     75.87
+    ],
+    "radius": 6.6,
+    "analog": "rec",
+    "tip": "Record level (analog, not reported to the guest)"
+   },
+   {
+    "id": "p1",
+    "type": "encoder",
+    "knob": 1,
+    "centre": [
+     247.46,
+     22.54
+    ],
+    "radius": 7.51,
+    "tip": "Encoder P1: drag or scroll"
+   },
+   {
+    "id": "p2",
+    "type": "encoder",
+    "knob": 2,
+    "centre": [
+     247.46,
+     48.72
+    ],
+    "radius": 7.51,
+    "tip": "Encoder P2: drag or scroll"
+   },
+   {
+    "id": "p3",
+    "type": "encoder",
+    "knob": 3,
+    "centre": [
+     247.46,
+     74.69
+    ],
+    "radius": 7.51,
+    "tip": "Encoder P3: drag or scroll"
+   },
+   {
+    "id": "p4",
+    "type": "encoder",
+    "knob": 4,
+    "centre": [
+     247.46,
+     100.87
+    ],
+    "radius": 7.51,
+    "tip": "Encoder P4: drag or scroll"
+   },
+   {
+    "id": "slider",
+    "type": "slider",
+    "rect": [
+     9.66,
+     139.08,
+     17.81,
+     50.87
+    ],
+    "led_x": 25.54,
+    "led_top": 141.65,
+    "led_bottom": 188.01,
+    "led_count": 16,
+    "led_size": [
+     1.93,
+     1.5
+    ],
+    "led_colour": "#ff2020",
+    "tip": "Touch slider: drag"
+   },
+   {
+    "id": "link_led1",
+    "type": "led",
+    "led": 62,
+    "rect": [
+     12.98,
+     99.59,
+     2.79,
+     1.72
+    ],
+    "colour": "#ff2222"
+   },
+   {
+    "id": "link_led2",
+    "type": "led",
+    "led": 63,
+    "rect": [
+     19.42,
+     99.59,
+     2.79,
+     1.72
+    ],
+    "colour": "#ff2222"
+   },
+   {
+    "id": "link_led3",
+    "type": "led",
+    "led": 64,
+    "rect": [
+     25.86,
+     99.59,
+     2.79,
+     1.72
+    ],
+    "colour": "#ff2222"
+   },
+   {
+    "id": "link_led4",
+    "type": "led",
+    "led": 65,
+    "rect": [
+     32.3,
+     99.59,
+     2.79,
+     1.72
+    ],
+    "colour": "#ff2222"
+   },
+   {
+    "id": "screen",
+    "type": "screen",
+    "rect": [
+     57.95,
+     18.99,
+     154.75,
+     90.67
+    ]
+   }
+  ],
+  "texts": [
+   {
+    "text": "behringer",
+    "x": 135.21,
+    "y": 14.17,
+    "size": 6.44,
+    "colour": "wordmark",
+    "align": "centre",
+    "font": "wordmark"
+   },
+   {
+    "text": "KICK",
+    "x": 135.32,
+    "y": 114.4,
+    "size": 4.29,
+    "colour": "wordmark_bright",
+    "align": "centre",
+    "font": "heading"
+   },
+   {
+    "text": "MASTER",
+    "x": 23.0,
+    "y": 33.27,
+    "size": 2.58,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MIN",
+    "x": 16.24,
+    "y": 55.37,
+    "size": 1.93,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MAX",
+    "x": 29.76,
+    "y": 55.37,
+    "size": 1.93,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "REC",
+    "x": 23.0,
+    "y": 65.25,
+    "size": 2.58,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MIN",
+    "x": 16.24,
+    "y": 87.35,
+    "size": 1.93,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MAX",
+    "x": 29.76,
+    "y": 87.35,
+    "size": 1.93,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "BANK",
+    "x": 217.84,
+    "y": 131.57,
+    "size": 2.36,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "P1",
+    "x": 247.46,
+    "y": 37.13,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "P2",
+    "x": 247.46,
+    "y": 62.67,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "P3",
+    "x": 247.46,
+    "y": 88.0,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "P4",
+    "x": 247.46,
+    "y": 113.11,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "E",
+    "x": 179.85,
+    "y": 147.66,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "F",
+    "x": 205.18,
+    "y": 147.66,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "G",
+    "x": 230.5,
+    "y": 147.66,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "H",
+    "x": 255.83,
+    "y": 147.66,
+    "size": 2.15,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "GRID",
+    "x": 180.08,
+    "y": 170.41,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "SAVE",
+    "x": 198.97,
+    "y": 170.41,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "PAD MIX",
+    "x": 217.84,
+    "y": 170.41,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "PAD MUTE",
+    "x": 236.95,
+    "y": 170.41,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "FX",
+    "x": 256.06,
+    "y": 170.41,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MASTER",
+    "x": 180.08,
+    "y": 193.16,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "LATCH",
+    "x": 180.08,
+    "y": 216.13,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "PREFS",
+    "x": 256.26,
+    "y": 192.95,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "AUTO",
+    "x": 180.28,
+    "y": 239.09,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "ON/OFF",
+    "x": 199.18,
+    "y": 239.09,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "LOOP",
+    "x": 218.28,
+    "y": 239.09,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "LINK EDIT",
+    "x": 237.38,
+    "y": 239.09,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "MIDI CTRL",
+    "x": 256.49,
+    "y": 239.09,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "HALF LVL",
+    "x": 18.46,
+    "y": 217.85,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "NOTES",
+    "x": 18.46,
+    "y": 240.81,
+    "size": 2.04,
+    "colour": "label",
+    "align": "centre",
+    "font": "label"
+   },
+   {
+    "text": "1",
+    "x": 40.99,
+    "y": 259.48,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "2",
+    "x": 73.19,
+    "y": 259.48,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "3",
+    "x": 105.38,
+    "y": 259.48,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "4",
+    "x": 137.58,
+    "y": 259.48,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "5",
+    "x": 40.99,
+    "y": 227.72,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "6",
+    "x": 73.19,
+    "y": 227.72,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "7",
+    "x": 105.38,
+    "y": 227.72,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "8",
+    "x": 137.58,
+    "y": 227.72,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "9",
+    "x": 40.99,
+    "y": 195.74,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "10",
+    "x": 73.19,
+    "y": 195.74,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "11",
+    "x": 105.38,
+    "y": 195.74,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "12",
+    "x": 137.58,
+    "y": 195.74,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "13",
+    "x": 40.99,
+    "y": 163.76,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "14",
+    "x": 73.19,
+    "y": 163.76,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "15",
+    "x": 105.38,
+    "y": 163.76,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   },
+   {
+    "text": "16",
+    "x": 137.58,
+    "y": 163.76,
+    "size": 1.93,
+    "colour": "label",
+    "align": "left",
+    "font": "label"
+   }
+  ],
+  "decor": [
+   {
+    "type": "camera",
+    "rect": [
+     8.59,
+     8.16,
+     28.33,
+     13.31
+    ],
+    "sensor": [
+     19.32,
+     15.02
+    ],
+    "lens": [
+     27.9,
+     15.02
+    ],
+    "lens_radius": 3.0
+   },
+   {
+    "type": "recess",
+    "rect": [
+     9.23,
+     96.15,
+     28.33,
+     24.04
+    ]
+   },
+   {
+    "type": "bezel",
+    "rect": [
+     45.93,
+     8.16,
+     178.35,
+     111.61
+    ]
+   },
+   {
+    "type": "recess",
+    "rect": [
+     6.44,
+     136.07,
+     23.61,
+     57.09
+    ]
+   },
+   {
+    "type": "line",
+    "from": [
+     172.56,
+     131.57
+    ],
+    "to": [
+     210.75,
+     131.57
+    ]
+   },
+   {
+    "type": "line",
+    "from": [
+     224.93,
+     131.57
+    ],
+    "to": [
+     263.13,
+     131.57
+    ]
+   },
+   {
+    "type": "line",
+    "from": [
+     249.93,
+     217.2
+    ],
+    "to": [
+     262.16,
+     217.2
+    ]
+   },
+   {
+    "type": "dot",
+    "centre": [
+     18.7,
+     52.58
+    ],
+    "radius": 0.47
+   },
+   {
+    "type": "dot",
+    "centre": [
+     27.3,
+     52.58
+    ],
+    "radius": 0.47
+   },
+   {
+    "type": "dot",
+    "centre": [
+     18.7,
+     84.35
+    ],
+    "radius": 0.47
+   },
+   {
+    "type": "dot",
+    "centre": [
+     27.3,
+     84.35
+    ],
+    "radius": 0.47
+   }
+  ]
+ },
+ "rear": {
+  "width": 270.0,
+  "height": 49.44,
+  "panel": [
+   9.13,
+   4.56,
+   252.51,
+   43.35
+  ],
+  "feet": [
+   [
+    26.62,
+    23.58
+   ],
+   [
+    222.85,
+    22.06
+   ]
+  ],
+  "foot_height": 3.04,
+  "dividers": [
+   44.11,
+   67.23,
+   111.95,
+   163.52,
+   184.82,
+   205.66
+  ],
+  "divider_top": 13.69,
+  "divider_bottom": 46.39,
+  "screws": [
+   [
+    15.52,
+    12.93
+   ],
+   [
+    136.9,
+    12.63
+   ],
+   [
+    245.05,
+    11.56
+   ]
+  ],
+  "screw_radius": 1.67,
+  "connectors": [
+   {
+    "id": "power",
+    "type": "power_button",
+    "centre": [
+     17.19,
+     36.51
+    ],
+    "radius": 3.35
+   },
+   {
+    "id": "dc_in",
+    "type": "dc_jack",
+    "centre": [
+     31.94,
+     34.99
+    ],
+    "size": [
+     8.37,
+     9.13
+    ]
+   },
+   {
+    "id": "link",
+    "type": "rj45",
+    "centre": [
+     55.83,
+     34.23
+    ],
+    "size": [
+     16.43,
+     13.39
+    ]
+   },
+   {
+    "id": "usb_c",
+    "type": "usb_c",
+    "centre": [
+     78.19,
+     39.09
+    ],
+    "size": [
+     9.13,
+     3.04
+    ]
+   },
+   {
+    "id": "usb_a",
+    "type": "usb_a",
+    "centre": [
+     98.42,
+     36.35
+    ],
+    "size": [
+     16.43,
+     8.37
+    ]
+   },
+   {
+    "id": "midi_in",
+    "type": "din",
+    "centre": [
+     126.25,
+     29.21
+    ],
+    "radius": 8.82
+   },
+   {
+    "id": "midi_out",
+    "type": "din",
+    "centre": [
+     149.07,
+     29.21
+    ],
+    "radius": 8.82
+   },
+   {
+    "id": "out_l",
+    "type": "jack",
+    "centre": [
+     173.86,
+     17.19
+    ],
+    "radius": 4.87
+   },
+   {
+    "id": "out_r",
+    "type": "jack",
+    "centre": [
+     173.86,
+     33.16
+    ],
+    "radius": 4.87
+   },
+   {
+    "id": "in_l",
+    "type": "jack",
+    "centre": [
+     195.01,
+     17.19
+    ],
+    "radius": 4.87
+   },
+   {
+    "id": "in_r",
+    "type": "jack",
+    "centre": [
+     195.01,
+     33.16
+    ],
+    "radius": 4.87
+   },
+   {
+    "id": "cv4",
+    "type": "mini_jack",
+    "channel": 3,
+    "centre": [
+     213.26,
+     32.4
+    ],
+    "radius": 3.35
+   },
+   {
+    "id": "cv3",
+    "type": "mini_jack",
+    "channel": 2,
+    "centre": [
+     225.43,
+     32.4
+    ],
+    "radius": 3.35
+   },
+   {
+    "id": "cv2",
+    "type": "mini_jack",
+    "channel": 1,
+    "centre": [
+     237.45,
+     32.4
+    ],
+    "radius": 3.35
+   },
+   {
+    "id": "cv1",
+    "type": "mini_jack",
+    "channel": 0,
+    "centre": [
+     249.46,
+     32.4
+    ],
+    "radius": 3.35
+   }
+  ],
+  "texts": [
+   {
+    "text": "POWER",
+    "x": 18.25,
+    "y": 46.39,
+    "size": 2.13
+   },
+   {
+    "text": "DC IN",
+    "x": 31.94,
+    "y": 46.39,
+    "size": 2.13
+   },
+   {
+    "text": "12V = 2000 mA",
+    "x": 31.94,
+    "y": 43.5,
+    "size": 1.37
+   },
+   {
+    "text": "LINK",
+    "x": 55.83,
+    "y": 45.79,
+    "size": 2.13
+   },
+   {
+    "text": "USB",
+    "x": 89.75,
+    "y": 45.48,
+    "size": 2.13
+   },
+   {
+    "text": "IN",
+    "x": 126.25,
+    "y": 19.32,
+    "size": 1.52
+   },
+   {
+    "text": "OUT",
+    "x": 149.07,
+    "y": 19.17,
+    "size": 1.52
+   },
+   {
+    "text": "MIDI",
+    "x": 137.97,
+    "y": 44.87,
+    "size": 2.13
+   },
+   {
+    "text": "L",
+    "x": 180.25,
+    "y": 13.69,
+    "size": 1.52
+   },
+   {
+    "text": "R",
+    "x": 180.25,
+    "y": 29.97,
+    "size": 1.52
+   },
+   {
+    "text": "L",
+    "x": 201.25,
+    "y": 13.69,
+    "size": 1.52
+   },
+   {
+    "text": "R",
+    "x": 201.25,
+    "y": 29.66,
+    "size": 1.52
+   },
+   {
+    "text": "OUTPUT",
+    "x": 174.32,
+    "y": 44.42,
+    "size": 2.13
+   },
+   {
+    "text": "INPUT",
+    "x": 195.31,
+    "y": 44.11,
+    "size": 2.13
+   },
+   {
+    "text": "4/8",
+    "x": 213.26,
+    "y": 27.53,
+    "size": 1.52
+   },
+   {
+    "text": "3/7",
+    "x": 225.43,
+    "y": 27.53,
+    "size": 1.52
+   },
+   {
+    "text": "2/6",
+    "x": 237.45,
+    "y": 27.53,
+    "size": 1.52
+   },
+   {
+    "text": "1/5",
+    "x": 249.46,
+    "y": 27.53,
+    "size": 1.52
+   },
+   {
+    "text": "CV / GATE",
+    "x": 231.67,
+    "y": 43.81,
+    "size": 2.13
+   }
+  ]
+ },
+ "front": {
+  "width": 270.0,
+  "height": 44.66,
+  "feet": [
+   [
+    14.21,
+    28.42
+   ],
+   [
+    233.46,
+    28.42
+   ]
+  ],
+  "foot_height": 3.25,
+  "wordmark": {
+   "x": 134.8,
+   "y": 24.36,
+   "size": 12.18
+  },
+  "connectors": [
+   {
+    "id": "sd",
+    "type": "sd_slot",
+    "rect": [
+     209.91,
+     36.54,
+     28.42,
+     2.84
+    ]
+   },
+   {
+    "id": "phones",
+    "type": "mini_jack",
+    "centre": [
+     250.51,
+     32.48
+    ],
+    "radius": 2.84
+   }
+  ],
+  "texts": [
+   {
+    "text": "SD",
+    "x": 224.12,
+    "y": 26.8,
+    "size": 2.84,
+    "font": "heading"
+   },
+   {
+    "text": "PHONES",
+    "x": 250.51,
+    "y": 25.98,
+    "size": 2.03
+   }
+  ]
+ }
+}

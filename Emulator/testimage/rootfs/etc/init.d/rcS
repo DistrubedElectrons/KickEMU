@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# System start of the KICK test image: pseudo file systems, kernel modules for the
+# devices present (coldplug), then optionally the self-test.
+#
+# Kernel command line options:
+#   kick.selftest=1    run kick-selftest on the console after start
+#   kick.poweroff=1    power off after the self-test (for automated runs)
+
+mountpoint -q /proc || mount -t proc proc /proc
+mountpoint -q /sys  || mount -t sysfs sysfs /sys
+mountpoint -q /dev  || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm /run /tmp
+mountpoint -q /dev/pts || mount -t devpts devpts /dev/pts
+mountpoint -q /run || mount -t tmpfs tmpfs /run
+mountpoint -q /tmp || mount -t tmpfs tmpfs /tmp
+mountpoint -q /sys/kernel/debug || mount -t debugfs debugfs /sys/kernel/debug 2>/dev/null
+
+hostname -F /etc/hostname
+ip link set lo up
+
+# No udev here: load the modules for every device the kernel has already found. Loading
+# a module can create new devices (e.g. the sound card), so this runs twice.
+for pass in 1 2; do
+    find /sys/devices -name modalias -exec cat {} + 2>/dev/null | sort -u \
+        | xargs modprobe -q -a 2>/dev/null
+done
+
+echo "KICK test image ($(uname -r)). Run 'kick-selftest' to check the board peripherals."
+
+for opt in $(cat /proc/cmdline); do
+    case "${opt}" in
+        kick.selftest=1) selftest=1 ;;
+        kick.poweroff=1) poweroff=1 ;;
+    esac
+done
+if [ "${selftest:-0}" = 1 ]; then
+    kick-selftest
+    [ "${poweroff:-0}" = 1 ] && poweroff -f
+fi
+exit 0

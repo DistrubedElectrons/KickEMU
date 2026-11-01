@@ -1,0 +1,102 @@
+# KICK (BE 0700-AAM) SoC, board and device models.
+
+config AR8033_PHY
+    bool
+
+config BD71847
+    bool
+    depends on I2C
+
+config FSL_IMX8MM
+    bool
+    imply I2C_DEVICES
+    select AR8033_PHY
+    select ARM_GIC
+    select BD71847
+    select IMX
+    select IMX8MM_DISPMIX
+    select IMX8MM_LCDIF
+    select IMX8MM_MIPI_DSIM
+    select IMX_FEC
+    select IMX_I2C
+    select OR_IRQ
+    select SDHCI
+    select UNIMP
+    select VIVANTE_GPU
+    select WDT_IMX2
+
+config IMX8MM_DISPMIX
+    bool
+
+config IMX8MM_LCDIF
+    bool
+    select FRAMEBUFFER
+
+config IMX8MM_MIPI_DSIM
+    bool
+
+config KICK
+    bool
+    default y
+    depends on AARCH64
+    select FSL_IMX8MM
+    select KICK_AD5675R
+    select KICK_GOODIX_GT911
+    select KICK_IMX8MM_SAI
+    select KICK_IMX_SDMA
+    select KICK_PCA9534
+    select KICK_PCF85263
+    select SN65DSI83
+
+config KICK_AD5675R
+    bool
+    select I2C
+
+config KICK_DISPLAY_BENCH
+    bool
+    default y
+    depends on AARCH64
+    select IMX8MM_DISPMIX
+    select IMX8MM_LCDIF
+    select IMX8MM_MIPI_DSIM
+    select IMX_I2C
+    select SN65DSI83
+    select VIVANTE_GPU
+
+config KICK_GOODIX_GT911
+    bool
+    select I2C
+
+config KICK_IMX8MM_SAI
+    bool
+
+config KICK_IMX_SDMA
+    bool
+
+config KICK_PCA9534
+    bool
+    select I2C
+
+config KICK_PCF85263
+    bool
+    select I2C
+
+config KICK_PERIPH_TEST
+    bool
+    default y
+    depends on AARCH64
+    select IMX_I2C
+    select KICK_AD5675R
+    select KICK_GOODIX_GT911
+    select KICK_IMX8MM_SAI
+    select KICK_IMX_SDMA
+    select KICK_PCA9534
+    select KICK_PCF85263
+
+config SN65DSI83
+    bool
+    depends on I2C
+    select IMX8MM_MIPI_DSIM
+
+config VIVANTE_GPU
+    bool
