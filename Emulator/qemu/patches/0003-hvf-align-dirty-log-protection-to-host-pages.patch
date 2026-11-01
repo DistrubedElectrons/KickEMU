@@ -1,0 +1,31 @@
+diff --git a/accel/hvf/hvf-all.c b/accel/hvf/hvf-all.c
+index 5f357c6..4087cab 100644
+--- a/accel/hvf/hvf-all.c
++++ b/accel/hvf/hvf-all.c
+@@ -54,14 +54,24 @@ static void do_hv_vm_protect(hwaddr start, size_t size,
+                              hv_memory_flags_t flags)
+ {
+     intptr_t page_mask = qemu_real_host_page_mask();
++    hwaddr end = start + size;
+     hv_return_t ret;
+ 
++    /*
++     * Dirty logging works on guest pages, HVF protects host pages (16 KiB
++     * on Apple silicon). A framebuffer or other logged section that does
++     * not start or end on a host page boundary covers the whole host
++     * pages around it; the write fault handler unprotects and marks dirty
++     * per host page, so the neighbouring bytes only cost an extra fault.
++     */
++    start &= page_mask;
++    end = (end + ~page_mask) & page_mask;
++    size = end - start;
++
+     trace_hvf_vm_protect(start, size, flags,
+                          flags & HV_MEMORY_READ  ? 'R' : '-',
+                          flags & HV_MEMORY_WRITE ? 'W' : '-',
+                          flags & HV_MEMORY_EXEC  ? 'X' : '-');
+-    g_assert(!((uintptr_t)start & ~page_mask));
+-    g_assert(!(size & ~page_mask));
+ 
+     ret = hv_vm_protect(start, size, flags);
+     assert_hvf_ok(ret);
