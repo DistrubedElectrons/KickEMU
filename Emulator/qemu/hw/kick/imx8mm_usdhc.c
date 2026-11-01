@@ -67,8 +67,11 @@ static uint64_t imx8mm_usdhc_sysctl_read(void *opaque, hwaddr offset,
 {
     SDHCIState *p = SYSBUS_SDHCI(opaque);
 
-    return p->iomem.ops->read(p->iomem.opaque, USDHC_SYS_CTRL, 4) |
-           SYS_CTRL_RESERVED_ONES;
+    uint64_t v = p->iomem.ops->read(p->iomem.opaque, USDHC_SYS_CTRL + offset,
+                                    size);
+
+    /* the reserved ones live in the lowest byte */
+    return offset == 0 ? v | SYS_CTRL_RESERVED_ONES : v;
 }
 
 static void imx8mm_usdhc_sysctl_write(void *opaque, hwaddr offset,
@@ -80,9 +83,12 @@ static void imx8mm_usdhc_sysctl_write(void *opaque, hwaddr offset,
      * Call the upstream handler directly: dispatching through its memory
      * region from here would trip QEMU's re-entrancy guard (same device).
      */
-    p->iomem.ops->write(p->iomem.opaque, USDHC_SYS_CTRL,
-                        value | SYS_CTRL_RESERVED_ONES, 4);
-    if (value & SYS_CTRL_RSTA) {
+    uint64_t rsta = SYS_CTRL_RSTA >> (offset * 8);
+
+    p->iomem.ops->write(p->iomem.opaque, USDHC_SYS_CTRL + offset,
+                        offset == 0 ? value | SYS_CTRL_RESERVED_ONES : value,
+                        size);
+    if (offset <= 3 && offset + size > 3 && (value & rsta)) {
         imx8mm_usdhc_status_enable_reset(p);
     }
 }
@@ -101,7 +107,8 @@ static uint64_t imx8mm_usdhc_status_read(void *opaque, hwaddr offset,
                        PRNSTS_DATA_INHIBIT | PRNSTS_DAT_ACTIVE);
         p->iomem.ops->write(p->iomem.opaque, USDHC_DS_ADDR, p->sdmasysad, 4);
     }
-    return p->iomem.ops->read(p->iomem.opaque, USDHC_INT_STATUS, 4);
+    return p->iomem.ops->read(p->iomem.opaque, USDHC_INT_STATUS + offset,
+                              size);
 }
 
 static void imx8mm_usdhc_status_write(void *opaque, hwaddr offset,
@@ -109,21 +116,22 @@ static void imx8mm_usdhc_status_write(void *opaque, hwaddr offset,
 {
     SDHCIState *p = SYSBUS_SDHCI(opaque);
 
-    p->iomem.ops->write(p->iomem.opaque, USDHC_INT_STATUS, value, 4);
+    p->iomem.ops->write(p->iomem.opaque, USDHC_INT_STATUS + offset, value,
+                        size);
 }
 
 static const MemoryRegionOps imx8mm_usdhc_status_ops = {
     .read = imx8mm_usdhc_status_read,
     .write = imx8mm_usdhc_status_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
-    .valid = { .min_access_size = 4, .max_access_size = 4 },
+    .valid = { .min_access_size = 1, .max_access_size = 4 },
 };
 
 static const MemoryRegionOps imx8mm_usdhc_sysctl_ops = {
     .read = imx8mm_usdhc_sysctl_read,
     .write = imx8mm_usdhc_sysctl_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
-    .valid = { .min_access_size = 4, .max_access_size = 4 },
+    .valid = { .min_access_size = 1, .max_access_size = 4 },
 };
 
 static void imx8mm_usdhc_init(Object *obj)
