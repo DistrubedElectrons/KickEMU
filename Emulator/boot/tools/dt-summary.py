@@ -136,7 +136,8 @@ class Tree:
         idx = self.gpio_index.get(ctrl.path)
         if idx is not None:
             return "GPIO%d_IO%02d" % (idx, pin)
-        return "%s.%d" % (ctrl.name, pin)
+        parent = ctrl.parent.name if ctrl.parent is not None else ""
+        return "%s/%s.%d" % (parent, ctrl.name, pin)
 
     # Registers -----------------------------------------------------------------
     def reg(self, node):
@@ -246,6 +247,16 @@ class Tree:
 
     def gpios(self, node):
         out = []
+        if "gpio-hog" in node.props:
+            # Hogs list "<pin flags>" without a controller phandle.
+            c = node.cells("gpios") or []
+            state = [k for k in ("output-high", "output-low", "input") if k in node.props]
+            for i in range(0, len(c) - 1, 2):
+                out.append("hog %s %s%s" % (
+                    self.gpio_name(node.parent, c[i]),
+                    "active-low" if c[i + 1] & 1 else "active-high",
+                    (" " + state[0]) if state else ""))
+            return out
         for prop in sorted(node.props):
             if prop.endswith("-gpios") or prop in ("gpios", "gpio") or prop.endswith("-gpio"):
                 for target, args in self.phandle_list(node, prop, "#gpio-cells"):
