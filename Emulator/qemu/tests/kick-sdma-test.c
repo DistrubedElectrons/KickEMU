@@ -10,6 +10,7 @@
 
 #include "qemu/osdep.h"
 #include "libqtest.h"
+#include "qemu/bswap.h"
 
 #define SDMA            0x302c0000
 #define SDMA_PATH       "/machine/sdma2"
@@ -82,10 +83,10 @@ static uint8_t bd_status(QTestState *qts, uint32_t addr)
     return qtest_readl(qts, addr) >> 16;
 }
 
-/* sdma_runtime_resume() + sdma_request_channel0() */
-static QTestState *sdma_init(void)
+/* sdma_runtime_resume() + sdma_request_channel0(), extra QEMU arguments */
+static QTestState *sdma_init_args(const char *extra)
 {
-    QTestState *qts = qtest_init("-M kick-periph-test");
+    QTestState *qts = qtest_initf("-M kick-periph-test %s", extra);
     int i;
 
     sdma_wr(qts, MC0PTR, 0);
@@ -107,6 +108,11 @@ static QTestState *sdma_init(void)
     sdma_wr(qts, MC0PTR, CCB);
     sdma_wr(qts, CHNPRI(0), 7);
     return qts;
+}
+
+static QTestState *sdma_init(void)
+{
+    return sdma_init_args("");
 }
 
 /* sdma_run_channel0(): returns with the command done */
@@ -342,6 +348,62 @@ static void test_unknown_script(void)
     qtest_quit(qts);
 }
 
+/*
+ * External firmware: a header (struct sdma_firmware_header, version 4)
+ * whose script table places ap_2_ap at RAM address 0x1822. The model reads
+ * the entry points from the file; a context starting there must run the
+ * memcpy semantics instead of failing like an unknown script.
+ */
+static void test_firmware_scripts(void)
+{
+    enum { NUM_ADDRS = 47, TABLE = 7 * 4 };
+    uint32_t fw[7 + NUM_ADDRS];
+    const uint32_t greg[8] = { 0 };
+    g_autofree char *path = NULL;
+    g_autofree char *arg = NULL;
+    QTestState *qts;
+    int fd, i;
+
+    for (i = 0; i < NUM_ADDRS; i++) {
+        fw[7 + i] = cpu_to_le32((uint32_t)-1);      /* not provided */
+    }
+    fw[0] = cpu_to_le32(0x414d4453);                /* "SDMA" */
+    fw[1] = cpu_to_le32(4);
+    fw[2] = cpu_to_le32(0);
+    fw[3] = cpu_to_le32(TABLE);
+    fw[4] = cpu_to_le32(NUM_ADDRS);
+    fw[5] = cpu_to_le32(sizeof(fw));
+    fw[6] = cpu_to_le32(0);
+    fw[7 + 0] = cpu_to_le32(0x1822);                /* ap_2_ap_addr */
+
+    fd = g_file_open_tmp("kick-sdma-fw-XXXXXX.bin", &path, NULL);
+    g_assert_cmpint(fd, >=, 0);
+    g_assert_cmpint(write(fd, fw, sizeof(fw)), ==, sizeof(fw));
+    close(fd);
+
+    arg = g_strdup_printf("-global imx8mm-sdma.firmware=%s", path);
+    qts = sdma_init_args(arg);
+    for (i = 0; i < 16; i++) {
+        qtest_writeb(qts, BUF_A + i, 0xa0 + i);
+        qtest_writeb(qts, BUF_B + i, 0);
+    }
+    sdma_wr(qts, EVTOVR, sdma_rd(qts, EVTOVR) | (1 << 4));
+    sdma_wr(qts, DSPOVR, sdma_rd(qts, DSPOVR) | (1 << 4));
+    load_context(qts, 4, 0x1822, greg);
+    sdma_wr(qts, CHNPRI(4), 1);
+    write_bd(qts, BD_CH, 16, BD_DONE | BD_EXTD | BD_INTR, 0, BUF_A, BUF_B);
+    qtest_writel(qts, CCB + 64, BD_CH);
+    qtest_writel(qts, CCB + 68, BD_CH);
+    sdma_wr(qts, HSTART, 1 << 4);
+    g_assert_true(wait_intr(qts, 1 << 4));
+    g_assert_cmphex(bd_status(qts, BD_CH) & (BD_DONE | BD_RROR), ==, 0);
+    for (i = 0; i < 16; i++) {
+        g_assert_cmphex(qtest_readb(qts, BUF_B + i), ==, 0xa0 + i);
+    }
+    qtest_quit(qts);
+    unlink(path);
+}
+
 static void test_event_error(void)
 {
     QTestState *qts = sdma_init();
@@ -368,6 +430,7 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/sdma/memcpy", test_memcpy);
     qtest_add_func("/kick/sdma/mcu-2-shp-sai", test_mcu_2_shp_sai);
     qtest_add_func("/kick/sdma/unknown-script", test_unknown_script);
+    qtest_add_func("/kick/sdma/firmware-scripts", test_firmware_scripts);
     qtest_add_func("/kick/sdma/event-error", test_event_error);
     return g_test_run();
 }

@@ -29,7 +29,7 @@ typedef struct IMXSDMAChannel {
     bool active;        /* a script is executing for this channel */
     bool blocked;       /* waiting for the CPU to hand over the next BD */
     uint32_t pc;
-    uint32_t script;    /* index into the script table */
+    uint32_t script;    /* index into IMXSDMAState.scripts, or nscripts */
     uint32_t bd;        /* current buffer descriptor address */
     uint32_t bd_bytes;  /* bytes already transferred for the current BD */
 } IMXSDMAChannel;
@@ -47,6 +47,11 @@ struct IMXSDMAState {
     /* Properties */
     uint32_t ram_size;
     uint32_t bd_poll_us;
+    char *firmware;             /* sdma-imx7d.bin the guest loads, optional */
+
+    /* Script entry points: ROM, then RAM scripts from the firmware header */
+    struct SDMAScript *scripts;
+    uint32_t nscripts;
 
     /* Host registers */
     uint32_t mc0ptr;

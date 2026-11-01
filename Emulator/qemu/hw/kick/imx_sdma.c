@@ -19,12 +19,17 @@
  *    ROM (Linux sdma_script_imx7d): ap_2_ap, app_2_mcu, mcu_2_app,
  *    uart_2_mcu, shp_2_mcu, mcu_2_shp, uartsh_2_mcu. These are all the
  *    scripts the KICK kernel selects: SAI2 (DT peripheral type 2 = MMC) uses
- *    shp_2_mcu/mcu_2_shp, UARTs uart_2_mcu/mcu_2_app, memcpy ap_2_ap. The
- *    RAM firmware (sdma-imx7d.bin 4.x) does not replace any of them.
- *  - A PC that is not one of those (for example a RAM script such as
- *    mcu_2_ecspi or mcu_2_sai) is logged as LOG_UNIMP and the transfer is
- *    terminated with BD_RROR and an interrupt, so the driver reports an
- *    error instead of hanging.
+ *    shp_2_mcu/mcu_2_shp, UARTs uart_2_mcu/mcu_2_app, memcpy ap_2_ap.
+ *  - With the RAM firmware (sdma-imx7d.bin, as on the KICK rootfs) the
+ *    driver takes every entry point from the firmware header, and the
+ *    5.4 kernel has no ROM entry for uart_2_mcu at all (it is a v3 field).
+ *    The "firmware" property names the same file; its header is read for
+ *    the RAM entry points (sdma_fw_scripts), which then run the semantics
+ *    of the matching script. The RAM code itself is not interpreted.
+ *  - A PC that is not one of those (for example mcu_2_ecspi, or a RAM
+ *    script without the "firmware" property) is logged as LOG_UNIMP and
+ *    the transfer is terminated with BD_RROR and an interrupt, so the
+ *    driver reports an error instead of hanging.
  *
  * Script semantics (per context: gReg[6] peripheral FIFO address, gReg[7]
  * watermark in bytes; per BD: count, buffer address, command = access
@@ -149,14 +154,14 @@ typedef enum {
     SCRIPT_UNKNOWN,
 } SDMAScriptKind;
 
-typedef struct SDMARomScript {
+typedef struct SDMAScript {
     uint32_t pc;
     const char *name;
     SDMAScriptKind kind;
-} SDMARomScript;
+} SDMAScript;
 
 /* i.MX 7D / 8M SDMA ROM script entry points (program memory addresses) */
-static const SDMARomScript sdma_rom_scripts[] = {
+static const SDMAScript sdma_rom_scripts[] = {
     { 644,  "ap_2_ap",      SCRIPT_AP_2_AP },
     { 685,  "app_2_mcu",    SCRIPT_PER_2_MCU },
     { 749,  "mcu_2_app",    SCRIPT_MCU_2_PER },
@@ -166,7 +171,33 @@ static const SDMARomScript sdma_rom_scripts[] = {
     { 1034, "uartsh_2_mcu", SCRIPT_UART_2_MCU },
 };
 
-#define SCRIPT_INDEX_UNKNOWN ARRAY_SIZE(sdma_rom_scripts)
+/*
+ * RAM scripts of the external firmware (sdma-imx7d.bin), by their index in
+ * the header's script address table (Linux struct sdma_script_start_addrs).
+ * The firmware is not shipped; its header is only read to learn where the
+ * guest's copy places each script, the code itself is not interpreted. Only
+ * scripts whose semantics the model implements are listed.
+ */
+static const struct {
+    uint32_t index;
+    const char *name;
+    SDMAScriptKind kind;
+} sdma_fw_scripts[] = {
+    { 0,  "ap_2_ap",            SCRIPT_AP_2_AP },
+    { 11, "uart_2_mcu_ram",     SCRIPT_UART_2_MCU },
+    { 13, "mcu_2_app",          SCRIPT_MCU_2_PER },
+    { 16, "uartsh_2_mcu_ram",   SCRIPT_UART_2_MCU },
+    { 18, "mcu_2_shp",          SCRIPT_MCU_2_PER },
+    { 22, "app_2_mcu",          SCRIPT_PER_2_MCU },
+    { 24, "shp_2_mcu",          SCRIPT_PER_2_MCU },
+    { 41, "mcu_2_sai",          SCRIPT_MCU_2_PER },
+    { 42, "sai_2_mcu",          SCRIPT_PER_2_MCU },
+    { 43, "uart_2_mcu",         SCRIPT_UART_2_MCU },
+    { 44, "uartsh_2_mcu",       SCRIPT_UART_2_MCU },
+};
+
+#define SDMA_FW_MAGIC       0x414d4453      /* "SDMA" */
+#define SDMA_FW_HDR_WORDS   7
 
 typedef struct SDMABD {
     uint32_t addr;
@@ -436,9 +467,9 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
     unsigned i;
 
     c->pc = state & 0x3fff;
-    c->script = SCRIPT_INDEX_UNKNOWN;
-    for (i = 0; i < ARRAY_SIZE(sdma_rom_scripts); i++) {
-        if (sdma_rom_scripts[i].pc == c->pc) {
+    c->script = s->nscripts;
+    for (i = 0; i < s->nscripts; i++) {
+        if (s->scripts[i].pc == c->pc) {
             c->script = i;
             break;
         }
@@ -450,10 +481,10 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
     c->blocked = false;
 }
 
-static SDMAScriptKind sdma_kind(IMXSDMAChannel *c)
+static SDMAScriptKind sdma_kind(IMXSDMAState *s, IMXSDMAChannel *c)
 {
-    return c->script < ARRAY_SIZE(sdma_rom_scripts) ?
-           sdma_rom_scripts[c->script].kind : SCRIPT_UNKNOWN;
+    return c->script < s->nscripts ? s->scripts[c->script].kind
+                                   : SCRIPT_UNKNOWN;
 }
 
 /* The channel ran out of work: clear HE, the script is done */
@@ -556,7 +587,7 @@ static void sdma_ap_2_ap(IMXSDMAState *s, int ch)
 static void sdma_per_burst(IMXSDMAState *s, int ch)
 {
     IMXSDMAChannel *c = &s->chan[ch];
-    SDMAScriptKind kind = sdma_kind(c);
+    SDMAScriptKind kind = sdma_kind(s, c);
     uint32_t per = sdma_ctx_greg(s, ch, 6);
     uint32_t wml = sdma_ctx_greg(s, ch, 7) & 0xffff;
     SDMABD bd;
@@ -614,7 +645,7 @@ static void sdma_step(IMXSDMAState *s, int ch)
     }
     s->psw = ch | ((s->chnpri[ch] & 7) << 5);
 
-    switch (sdma_kind(c)) {
+    switch (sdma_kind(s, c)) {
     case SCRIPT_AP_2_AP:
         sdma_ap_2_ap(s, ch);
         break;
@@ -971,6 +1002,60 @@ static void sdma_reset(DeviceState *dev)
     sdma_update_irq(s);
 }
 
+/*
+ * Script table: the ROM entry points, plus the RAM entry points listed in
+ * the header of the firmware file the guest will load (struct
+ * sdma_firmware_header: magic, version major/minor, script_addrs_start,
+ * num_script_addrs, ram_code_start, ram_code_size; little endian).
+ */
+static bool sdma_build_scripts(IMXSDMAState *s, Error **errp)
+{
+    g_autofree char *data = NULL;
+    gsize len = 0;
+    uint32_t hdr[SDMA_FW_HDR_WORDS];
+    unsigned i;
+
+    s->nscripts = ARRAY_SIZE(sdma_rom_scripts);
+    s->scripts = g_new(SDMAScript, s->nscripts + ARRAY_SIZE(sdma_fw_scripts));
+    memcpy(s->scripts, sdma_rom_scripts, sizeof(sdma_rom_scripts));
+    if (!s->firmware || !*s->firmware) {
+        return true;
+    }
+
+    if (!g_file_get_contents(s->firmware, &data, &len, NULL) ||
+        len < sizeof(hdr)) {
+        error_setg(errp, "%s: cannot read firmware '%s'", TYPE_IMX_SDMA,
+                   s->firmware);
+        return false;
+    }
+    for (i = 0; i < SDMA_FW_HDR_WORDS; i++) {
+        hdr[i] = ldl_le_p(data + i * 4);
+    }
+    if (hdr[0] != SDMA_FW_MAGIC || hdr[3] > len ||
+        hdr[4] > (len - hdr[3]) / 4) {
+        error_setg(errp, "%s: '%s' is not an SDMA firmware file",
+                   TYPE_IMX_SDMA, s->firmware);
+        return false;
+    }
+    for (i = 0; i < ARRAY_SIZE(sdma_fw_scripts); i++) {
+        int32_t pc;
+
+        if (sdma_fw_scripts[i].index >= hdr[4]) {
+            continue;
+        }
+        pc = (int32_t)ldl_le_p(data + hdr[3] + sdma_fw_scripts[i].index * 4);
+        if (pc <= 0) {
+            continue;
+        }
+        s->scripts[s->nscripts++] = (SDMAScript) {
+            .pc = pc,
+            .name = sdma_fw_scripts[i].name,
+            .kind = sdma_fw_scripts[i].kind,
+        };
+    }
+    return true;
+}
+
 static void sdma_realize(DeviceState *dev, Error **errp)
 {
     IMXSDMAState *s = IMX_SDMA(dev);
@@ -985,6 +1070,9 @@ static void sdma_realize(DeviceState *dev, Error **errp)
     } else {
         s->dma_as = g_new0(AddressSpace, 1);
         address_space_init(s->dma_as, s->dma_mr, TYPE_IMX_SDMA "-dma");
+    }
+    if (!sdma_build_scripts(s, errp)) {
+        return;
     }
     s->ram_words = s->ram_size / 4;
     s->ram = g_new0(uint32_t, s->ram_words);
@@ -1066,6 +1154,7 @@ static const Property sdma_properties[] = {
     DEFINE_PROP_UINT32("ram-size", IMXSDMAState, ram_size, 16 * KiB),
     /* Recheck interval for a channel waiting for the CPU to return a BD */
     DEFINE_PROP_UINT32("bd-poll-us", IMXSDMAState, bd_poll_us, 100),
+    DEFINE_PROP_STRING("firmware", IMXSDMAState, firmware),
 };
 
 static void sdma_class_init(ObjectClass *klass, const void *data)
