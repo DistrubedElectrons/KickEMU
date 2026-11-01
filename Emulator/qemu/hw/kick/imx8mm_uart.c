@@ -17,6 +17,14 @@
  *    shifter per frame time, from the reference clock, RFDIV, UBIR/UBMR and
  *    the frame format in UCR2 (start, 7/8 data, parity, 1/2 stop bits). The
  *    reference clock is the UARTn CCM root when the "ccm" link is set.
+ *    Characters are scheduled by their due time, not one timer per frame:
+ *    hosts without ppoll() run QEMU timers with millisecond granularity,
+ *    far coarser than a frame at 230400 baud. A late timer catches up on
+ *    every character that is due. On the receive side catching up stops as
+ *    soon as RRDY asks for service and resumes after the next URXD read,
+ *    so the DMA or the driver drains the FIFO between characters as it
+ *    would on hardware. On the transmit side a line that became idle less
+ *    than "catch-up-us" ago continues at its own pace instead of now.
  *  - Ageing timer: AGTIM after 8 frame times without a character received
  *    or read while the RX FIFO is not empty and below RXTL. Idle detect:
  *    USR2.IDLE after 4/8/16/32 idle frames (UCR1.ICD) following a character.
@@ -209,9 +217,19 @@ static int64_t uart_frame_ns(IMX8MMUARTState *s)
     return bits * NANOSECONDS_PER_SECOND * 1000 / MAX(mbaud, 1);
 }
 
+static int64_t uart_now(void)
+{
+    return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
+}
+
 static int64_t uart_after_frames(IMX8MMUARTState *s, unsigned frames)
 {
-    return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL) + frames * uart_frame_ns(s);
+    return uart_now() + frames * uart_frame_ns(s);
+}
+
+static bool uart_tx_line_busy(IMX8MMUARTState *s)
+{
+    return s->line_timing && s->tx_line_free > uart_now();
 }
 
 /* Recompute the FIFO driven status bits, the interrupt and DMA requests */
@@ -235,13 +253,13 @@ static void uart_update(IMX8MMUARTState *s)
     if (rxn && rxn >= rxtl) {
         s->usr1 |= USR1_RRDY;
     }
-    if (!s->rx_busy) {
+    if (fifo32_is_empty(&s->rx_line)) {
         s->usr1 |= USR1_RXDS;
     }
     if (!txn) {
         s->usr2 |= USR2_TXFE;
         s->uts |= UTS_TXEMPTY;
-        if (!s->tx_busy && !s->tx_stalled) {
+        if (!uart_tx_line_busy(s) && !s->tx_stalled) {
             s->usr2 |= USR2_TXDC;
         }
     }
@@ -346,8 +364,45 @@ static void uart_rx_push(IMX8MMUARTState *s, uint32_t v)
     }
     uart_ageing_restart(s);
     /* Idle condition: more than 4 << ICD frames without a new start bit */
-    timer_mod(&s->idle_timer, uart_after_frames(s, 4u << icd));
+    if (fifo32_is_empty(&s->rx_line)) {
+        timer_mod(&s->idle_timer, uart_after_frames(s, 4u << icd));
+    } else {
+        timer_del(&s->idle_timer);
+    }
     uart_update(s);
+}
+
+/*
+ * Move the characters that are complete by now from the line into the RX
+ * FIFO. While RRDY is set only one character per call goes in, so a late
+ * timer cannot flood the FIFO before the DMA or the driver had a chance to
+ * read it; a URXD read resumes. A full FIFO holds the line (the remote
+ * waits) instead of overrunning.
+ */
+static void uart_rx_service(IMX8MMUARTState *s)
+{
+    int64_t now = uart_now();
+    int64_t frame = uart_frame_ns(s);
+    bool first = true;
+
+    while (!fifo32_is_empty(&s->rx_line) && s->rx_due <= now &&
+           !fifo32_is_full(&s->rx_fifo) &&
+           (first || !(s->usr1 & USR1_RRDY))) {
+        uart_rx_push(s, fifo32_pop(&s->rx_line));
+        s->rx_due += frame;
+        first = false;
+    }
+    if (!fifo32_is_empty(&s->rx_line) && !fifo32_is_full(&s->rx_fifo)) {
+        timer_mod(&s->rx_timer, MAX(s->rx_due, s->rx_due <= now ?
+                                    now + frame : s->rx_due));
+    }
+    uart_update(s);
+    qemu_chr_fe_accept_input(&s->chr);
+}
+
+static void uart_rx_timer(void *opaque)
+{
+    uart_rx_service(opaque);
 }
 
 /* Start bit of a character from the line */
@@ -360,19 +415,12 @@ static void uart_rx_start(IMX8MMUARTState *s, uint32_t v)
         uart_rx_push(s, v);
         return;
     }
-    s->rx_busy = true;
-    s->rx_char = v;
-    timer_mod(&s->rx_timer, uart_after_frames(s, 1));
+    if (fifo32_is_empty(&s->rx_line)) {
+        s->rx_due = uart_after_frames(s, 1);
+        timer_mod(&s->rx_timer, s->rx_due);
+    }
+    fifo32_push(&s->rx_line, v);
     uart_update(s);
-}
-
-static void uart_rx_done(void *opaque)
-{
-    IMX8MMUARTState *s = opaque;
-
-    s->rx_busy = false;
-    uart_rx_push(s, s->rx_char);
-    qemu_chr_fe_accept_input(&s->chr);
 }
 
 static int uart_can_receive(void *opaque)
@@ -383,7 +431,7 @@ static int uart_can_receive(void *opaque)
         return 0;
     }
     if (s->line_timing) {
-        return !s->rx_busy && !fifo32_is_full(&s->rx_fifo);
+        return fifo32_num_free(&s->rx_line);
     }
     return fifo32_num_free(&s->rx_fifo);
 }
@@ -401,12 +449,13 @@ static void uart_event(void *opaque, QEMUChrEvent event)
 {
     IMX8MMUARTState *s = opaque;
 
-    if (event == CHR_EVENT_BREAK && uart_enabled(s, UCR2_RXEN)) {
+    if (event == CHR_EVENT_BREAK && uart_enabled(s, UCR2_RXEN) &&
+        fifo32_num_free(&s->rx_line)) {
         uart_rx_start(s, URXD_BRK | URXD_FRMERR | URXD_ERR);
     }
 }
 
-static void uart_tx_start(IMX8MMUARTState *s);
+static void uart_tx_service(IMX8MMUARTState *s);
 
 static gboolean uart_tx_writable(void *do_not_use, GIOCondition cond,
                                  void *opaque);
@@ -440,15 +489,6 @@ static bool uart_tx_emit(IMX8MMUARTState *s)
     return false;
 }
 
-/* The character went out: the shifter is busy for one frame */
-static void uart_tx_sent(IMX8MMUARTState *s)
-{
-    if (s->line_timing) {
-        s->tx_busy = true;
-        timer_mod(&s->tx_timer, uart_after_frames(s, 1));
-    }
-}
-
 static gboolean uart_tx_writable(void *do_not_use, GIOCondition cond,
                                  void *opaque)
 {
@@ -457,30 +497,44 @@ static gboolean uart_tx_writable(void *do_not_use, GIOCondition cond,
     s->tx_watch = 0;
     s->tx_stalled = false;
     if (uart_tx_emit(s)) {
-        uart_tx_sent(s);
-        uart_tx_start(s);
+        uart_tx_service(s);
     }
     return G_SOURCE_REMOVE;
 }
 
-static void uart_tx_done(void *opaque)
+static void uart_tx_timer(void *opaque)
 {
-    IMX8MMUARTState *s = opaque;
-
-    s->tx_busy = false;
-    uart_tx_start(s);
+    uart_tx_service(opaque);
 }
 
-/* Move characters from the TX FIFO into the shifter while it is free */
-static void uart_tx_start(IMX8MMUARTState *s)
+/*
+ * Shift out every character of the TX FIFO whose turn has come. A line
+ * that went idle within the catch-up window keeps its pace, one that has
+ * been idle for longer starts with the next character now.
+ */
+static void uart_tx_service(IMX8MMUARTState *s)
 {
-    while (!s->tx_busy && !s->tx_stalled && uart_enabled(s, UCR2_TXEN) &&
+    int64_t now = uart_now();
+    int64_t slack = (int64_t)s->catch_up_us * SCALE_US;
+
+    while (!s->tx_stalled && uart_enabled(s, UCR2_TXEN) &&
            !fifo32_is_empty(&s->tx_fifo)) {
+        if (s->line_timing) {
+            if (s->tx_line_free > now) {
+                break;
+            }
+            if (now - s->tx_line_free > slack) {
+                s->tx_line_free = now;
+            }
+            s->tx_line_free += uart_frame_ns(s);
+        }
         s->tx_char = fifo32_pop(&s->tx_fifo);
         if (!uart_tx_emit(s)) {
             break;
         }
-        uart_tx_sent(s);
+    }
+    if (s->line_timing && !s->tx_stalled && s->tx_line_free > now) {
+        timer_mod(&s->tx_timer, s->tx_line_free);
     }
     uart_update(s);
 }
@@ -490,13 +544,14 @@ static void uart_soft_reset(IMX8MMUARTState *s)
 {
     fifo32_reset(&s->rx_fifo);
     fifo32_reset(&s->tx_fifo);
-    s->tx_busy = false;
+    fifo32_reset(&s->rx_line);
+    s->tx_line_free = INT64_MIN / 2;     /* idle for ever */
     s->tx_stalled = false;
     if (s->tx_watch) {
         g_source_remove(s->tx_watch);
         s->tx_watch = 0;
     }
-    s->rx_busy = false;
+    qemu_bh_cancel(s->rx_bh);
     timer_del(&s->tx_timer);
     timer_del(&s->rx_timer);
     timer_del(&s->ageing_timer);
@@ -524,6 +579,13 @@ static uint64_t uart_read(void *opaque, hwaddr offset, unsigned size)
         s->urxd_last = v;
         uart_ageing_restart(s);
         uart_update(s);
+        /*
+         * Characters held back on the line follow from a bottom half, not
+         * from inside the access (which may come from the SDMA)
+         */
+        if (!fifo32_is_empty(&s->rx_line)) {
+            qemu_bh_schedule(s->rx_bh);
+        }
         qemu_chr_fe_accept_input(&s->chr);
         return v;
     case UTXD:
@@ -579,11 +641,11 @@ static void uart_write(void *opaque, hwaddr offset, uint64_t value,
             break;
         }
         fifo32_push(&s->tx_fifo, v & 0xff);
-        uart_tx_start(s);
+        uart_tx_service(s);
         break;
     case UCR1:
         s->ucr1 = v & 0xffff;
-        uart_tx_start(s);
+        uart_tx_service(s);
         qemu_chr_fe_accept_input(&s->chr);
         break;
     case UCR2:
@@ -593,7 +655,7 @@ static void uart_write(void *opaque, hwaddr offset, uint64_t value,
             v |= UCR2_SRST;
         }
         s->ucr2 = v & 0xffff;
-        uart_tx_start(s);
+        uart_tx_service(s);
         qemu_chr_fe_accept_input(&s->chr);
         break;
     case UCR3:
@@ -698,8 +760,11 @@ static void uart_realize(DeviceState *dev, Error **errp)
     }
     fifo32_create(&s->rx_fifo, IMX8MM_UART_FIFO_SIZE);
     fifo32_create(&s->tx_fifo, IMX8MM_UART_FIFO_SIZE);
-    timer_init_ns(&s->tx_timer, QEMU_CLOCK_VIRTUAL, uart_tx_done, s);
-    timer_init_ns(&s->rx_timer, QEMU_CLOCK_VIRTUAL, uart_rx_done, s);
+    fifo32_create(&s->rx_line, IMX8MM_UART_FIFO_SIZE);
+    s->rx_bh = qemu_bh_new_guarded(uart_rx_timer, s,
+                                   &dev->mem_reentrancy_guard);
+    timer_init_ns(&s->tx_timer, QEMU_CLOCK_VIRTUAL, uart_tx_timer, s);
+    timer_init_ns(&s->rx_timer, QEMU_CLOCK_VIRTUAL, uart_rx_timer, s);
     timer_init_ns(&s->ageing_timer, QEMU_CLOCK_VIRTUAL, uart_ageing_expired,
                   s);
     timer_init_ns(&s->idle_timer, QEMU_CLOCK_VIRTUAL, uart_idle_expired, s);
@@ -758,11 +823,11 @@ static const VMStateDescription vmstate_uart = {
         VMSTATE_UINT32(urxd_last, IMX8MMUARTState),
         VMSTATE_FIFO32(rx_fifo, IMX8MMUARTState),
         VMSTATE_FIFO32(tx_fifo, IMX8MMUARTState),
-        VMSTATE_BOOL(tx_busy, IMX8MMUARTState),
+        VMSTATE_INT64(tx_line_free, IMX8MMUARTState),
         VMSTATE_BOOL(tx_stalled, IMX8MMUARTState),
         VMSTATE_UINT32(tx_char, IMX8MMUARTState),
-        VMSTATE_BOOL(rx_busy, IMX8MMUARTState),
-        VMSTATE_UINT32(rx_char, IMX8MMUARTState),
+        VMSTATE_FIFO32(rx_line, IMX8MMUARTState),
+        VMSTATE_INT64(rx_due, IMX8MMUARTState),
         VMSTATE_TIMER(tx_timer, IMX8MMUARTState),
         VMSTATE_TIMER(rx_timer, IMX8MMUARTState),
         VMSTATE_TIMER(ageing_timer, IMX8MMUARTState),
@@ -782,6 +847,8 @@ static const Property uart_properties[] = {
                        24000000),
     /* Shift characters at the programmed baud rate, or instantly */
     DEFINE_PROP_BOOL("line-timing", IMX8MMUARTState, line_timing, true),
+    /* How long a transmitter may lag behind its pace and still catch up */
+    DEFINE_PROP_UINT32("catch-up-us", IMX8MMUARTState, catch_up_us, 2000),
 };
 
 static void uart_class_init(ObjectClass *klass, const void *data)

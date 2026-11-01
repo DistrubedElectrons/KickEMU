@@ -344,11 +344,17 @@ static void test_rx_fifo_full(void)
 
         g_assert_cmphex(v, ==, URXD_CHARRDY | flags | buf[i]);
     }
+    /*
+     * The characters held back on the line are overdue and follow each
+     * read, so they may land in position 32 (flagged) as well; none is lost
+     */
     g_assert_cmphex(rd(&f, USR2) & USR2_ORE, ==, 0);
     for (int i = 32; i < sizeof(buf); i++) {
         g_assert_true(wait_reg(&f, USR2, USR2_RDR, USR2_RDR));
-        g_assert_cmphex(rd(&f, URXD), ==, URXD_CHARRDY | buf[i]);
+        g_assert_cmphex(rd(&f, URXD) & (URXD_CHARRDY | 0xff), ==,
+                        URXD_CHARRDY | buf[i]);
     }
+    g_assert_cmphex(rd(&f, USR2) & (USR2_ORE | USR2_RDR), ==, 0);
     fixture_done(&f);
 }
 

@@ -56,17 +56,22 @@ struct IMX8MMUARTState {
     Fifo32 rx_fifo;
     Fifo32 tx_fifo;
 
-    /* Transmit shift register */
-    bool tx_busy;           /* a character is on the line */
+    /* Transmitter: the line is busy until tx_line_free */
+    int64_t tx_line_free;
     bool tx_stalled;        /* the backend did not take tx_char yet */
     uint32_t tx_char;
     guint tx_watch;
     QEMUTimer tx_timer;
 
-    /* Receive shift register */
-    bool rx_busy;
-    uint32_t rx_char;
+    /*
+     * Receiver: characters the backend handed over that are still on the
+     * line. The first one is complete at rx_due, each further one a frame
+     * later.
+     */
+    Fifo32 rx_line;
+    int64_t rx_due;
     QEMUTimer rx_timer;
+    QEMUBH *rx_bh;
 
     QEMUTimer ageing_timer;
     QEMUTimer idle_timer;
@@ -76,6 +81,7 @@ struct IMX8MMUARTState {
     uint32_t ccm_root;
     uint32_t ref_clock_hz;
     bool line_timing;
+    uint32_t catch_up_us;
 };
 
 #endif /* KICK_IMX8MM_UART_H */
