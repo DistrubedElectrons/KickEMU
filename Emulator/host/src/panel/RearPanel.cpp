@@ -302,7 +302,7 @@ namespace kickemu
                 auto text = juce::String (cvShown[(size_t) a], 2) + " V";
                 if (status.cvChannels && b < status.cvChannels())
                     text << "\n" << juce::String (cvShown[(size_t) b], 2) + " V";
-                auto font = theme.monoFont (1.45f * scale);
+                auto font = theme.monoFont (2.1f * scale);
                 g.setFont (font);
                 const float level = juce::jlimit (0.0f, 1.0f, juce::jmax (cvShown[(size_t) a], cvShown[(size_t) b]) / 5.0f);
                 g.setColour (juce::Colour (0xff4fd2ff).withAlpha (0.45f + 0.55f * level));

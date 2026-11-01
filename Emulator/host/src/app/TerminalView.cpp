@@ -16,9 +16,7 @@ namespace kickemu
     {
         setWantsKeyboardFocus (true);
         setOpaque (true);
-        juce::GlyphArrangement ga;
-        ga.addLineOfText (font, "MMMMMMMMMM", 0, 0);
-        cellW = ga.getBoundingBox (0, -1, true).getWidth() / 10.0f;
+        cellW = juce::GlyphArrangement::getStringWidth (font, "MMMMMMMMMM") / 10.0f;
         cellH = std::ceil (font.getHeight() * 1.12f);
         startTimerHz (30);
     }

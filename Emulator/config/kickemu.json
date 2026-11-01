@@ -76,7 +76,7 @@
       "blink_period_ms": 500,
       "log_lines": 5000,
       "terminal_scrollback": 4000,
-      "terminal_font_size": 13.0
+      "terminal_font_size": 12.0
     },
     "mcu": {
       "frame_trailer": [10],

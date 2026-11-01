@@ -183,9 +183,12 @@ namespace kickemu
             c = Contact();
 
         // Absolute pointer events for single-touch consumers (primary contact only).
+        // Sent as a separate command: QEMU rejects a whole batch if no device
+        // takes abs events, which must not cost us the multitouch events.
+        juce::Array<juce::var> absEvents;
         if (sendAbs && slot == 0)
         {
-            auto abs = [&events] (const char* axis, int value)
+            auto abs = [&absEvents] (const char* axis, int value)
             {
                 auto* d = new juce::DynamicObject();
                 d->setProperty ("axis", axis);
@@ -193,7 +196,7 @@ namespace kickemu
                 auto* ev = new juce::DynamicObject();
                 ev->setProperty ("type", "abs");
                 ev->setProperty ("data", juce::var (d));
-                events.add (juce::var (ev));
+                absEvents.add (juce::var (ev));
             };
             abs ("x", axes.x);
             abs ("y", axes.y);
@@ -221,6 +224,27 @@ namespace kickemu
             if (err.isNotEmpty() && hint)
                 juce::MessageManager::callAsync ([hint, err] { hint ("Touch: " + err); });
         });
+
+        if (! absEvents.isEmpty())
+        {
+            auto* absArgs = new juce::DynamicObject();
+            absArgs->setProperty ("events", absEvents);
+            qmp.execute ("input-send-event", juce::var (absArgs),
+                         [safe = juce::Component::SafePointer<ScreenComponent> (this), hint] (const juce::var&, const juce::String& err)
+            {
+                // No absolute pointer device in this machine: stop sending them.
+                if (err.contains ("not found"))
+                    juce::MessageManager::callAsync ([safe, hint]
+                    {
+                        if (safe != nullptr && safe->sendAbs)
+                        {
+                            safe->sendAbs = false;
+                            if (hint)
+                                hint ("Touch: no absolute pointer device, sending multitouch only");
+                        }
+                    });
+            });
+        }
     }
 
     void ScreenComponent::mouseDown (const juce::MouseEvent& e)
