@@ -224,6 +224,58 @@ static void test_sync_needs_clock_side(void)
     qtest_quit(qts);
 }
 
+/*
+ * Data line 0 reaches the audiodev: record it with the wav backend (16 bit,
+ * so the S32 samples arrive as their upper half).
+ */
+static void test_playback_to_audiodev(void)
+{
+    g_autofree char *path = NULL;
+    g_autofree char *wav = NULL;
+    QTestState *qts;
+    gsize len;
+    int fd = g_file_open_tmp("kick-sai-XXXXXX.wav", &path, NULL);
+    int i, first = -1;
+    const int16_t *pcm;
+    size_t n;
+
+    g_assert(fd >= 0);
+    close(fd);
+    qts = qtest_initf("-M kick-periph-test,audiodev=w -audiodev wav,id=w,"
+                      "path=%s,out.frequency=48000,out.channels=2,"
+                      "out.format=s16", path);
+    sai_setup_i2s(qts, 0x08);
+    /* Left = (n + 1) << 20, right = -left, exact through the mixer */
+    for (i = 0; i < 64; i++) {
+        wr(qts, TDR0, (uint32_t)((i + 1) << 20));
+        wr(qts, TDR0, (uint32_t)(-((i + 1) << 20)));
+    }
+    wr(qts, TCSR, CSR_TE);
+    qtest_clock_step(qts, 100 * MS);
+    qtest_quit(qts);
+
+    g_assert(g_file_get_contents(path, &wav, &len, NULL));
+    unlink(path);
+    g_assert_cmpuint(len, >, 44);
+    pcm = (const int16_t *)(wav + 44);
+    n = (len - 44) / 2;
+    for (i = 0; i < (int)n; i += 2) {
+        if (pcm[i]) {
+            first = i;
+            break;
+        }
+    }
+    g_assert_cmpint(first, >=, 0);
+    g_assert_cmpuint(n - first, >=, 128);
+    /* The float mixer may round the 16 bit result by one LSB */
+    for (i = 0; i < 64; i++) {
+        g_assert_cmpint(abs(GINT16_FROM_LE(pcm[first + 2 * i]) -
+                            ((i + 1) << 4)), <=, 1);
+        g_assert_cmpint(abs(GINT16_FROM_LE(pcm[first + 2 * i + 1]) +
+                            ((i + 1) << 4)), <=, 1);
+    }
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -234,5 +286,6 @@ int main(int argc, char **argv)
                    test_playback_rate_underrun);
     qtest_add_func("/kick/sai/capture-synchronous", test_capture_synchronous);
     qtest_add_func("/kick/sai/sync-clock-side", test_sync_needs_clock_side);
+    qtest_add_func("/kick/sai/playback-audiodev", test_playback_to_audiodev);
     return g_test_run();
 }
