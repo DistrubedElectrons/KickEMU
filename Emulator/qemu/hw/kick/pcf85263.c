@@ -19,10 +19,18 @@
  * the KICK board), watchdog, battery switch-over and frequency offset
  * calibration.
  *
- * Note for the KICK board: the vendor DT overrides this node's compatible
- * with "dallas,ds1337" and the kernel only enables RTC_DRV_DS1307, so the
- * guest talks to this register map with the DS1337 layout, as on the real
- * board.
+ * Register view (property "register-map"):
+ *  - "pcf85263": the PCF85263A register map described above. This is what
+ *    the silicon on the KICK board implements.
+ *  - "ds1337" (default): a Maxim DS1337 compatible register map (DS1337
+ *    data sheet: 0x00..0x06 time with century bit, alarm 1 0x07..0x0A and
+ *    alarm 2 0x0B..0x0D with mask bits, control 0x0E with nEOSC/INTCN/
+ *    A2IE/A1IE, status 0x0F with OSF/A2F/A1F) on the same time base. The
+ *    KICK DT overrides this node's compatible with "dallas,ds1337" and the
+ *    kernel only has RTC_DRV_DS1307, so the shipped kernel speaks DS1337 to
+ *    the chip. This view gives that driver a working clock; select
+ *    "pcf85263" to reproduce the mismatch of the real board. The INTCN = 0
+ *    square wave output is not modelled.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -139,6 +147,42 @@ OBJECT_DECLARE_SIMPLE_TYPE(PCF85263State, PCF85263)
 
 #define NS_PER_SEC          1000000000LL
 
+/* DS1337 register view */
+#define DS_SECONDS          0x00
+#define DS_MINUTES          0x01
+#define DS_HOURS            0x02    /* bit 6: 12 hour mode, bit 5: PM */
+#define DS_DAY              0x03    /* 1..7 */
+#define DS_DATE             0x04
+#define DS_MONTH            0x05    /* bit 7: century */
+#define DS_YEAR             0x06
+#define DS_A1_SECONDS       0x07    /* bit 7 of 0x07..0x0D: alarm mask */
+#define DS_A1_MINUTES       0x08
+#define DS_A1_HOURS         0x09
+#define DS_A1_DAYDATE       0x0a    /* bit 6: DY/DT */
+#define DS_A2_MINUTES       0x0b
+#define DS_A2_HOURS         0x0c
+#define DS_A2_DAYDATE       0x0d
+#define DS_CONTROL          0x0e
+#define DS_STATUS           0x0f
+#define DS_NUM_REGS         0x10
+
+#define DS_HOURS_12         BIT(6)
+#define DS_HOURS_PM         BIT(5)
+#define DS_MONTH_CENTURY    BIT(7)
+#define DS_ALARM_MASK       BIT(7)
+#define DS_ALARM_DY         BIT(6)
+#define DS_CTRL_NEOSC       BIT(7)
+#define DS_CTRL_RS_MASK     0x18
+#define DS_CTRL_INTCN       BIT(2)
+#define DS_CTRL_A2IE        BIT(1)
+#define DS_CTRL_A1IE        BIT(0)
+#define DS_CTRL_RW_MASK     0x9f
+#define DS_CTRL_RESET       0x18    /* RS2 = RS1 = 1 */
+#define DS_STAT_OSF         BIT(7)
+#define DS_STAT_A2F         BIT(1)
+#define DS_STAT_A1F         BIT(0)
+#define DS_STAT_FLAGS       (DS_STAT_OSF | DS_STAT_A2F | DS_STAT_A1F)
+
 struct PCF85263State {
     I2CSlave parent_obj;
 
@@ -159,6 +203,14 @@ struct PCF85263State {
     int8_t wday_offset;
     bool pulse_a;
     bool pulse_b;
+
+    /* DS1337 register view */
+    char *register_map;
+    bool ds_view;
+    uint8_t ds[DS_NUM_REGS];
+    bool ds_time_dirty;
+    int8_t ds_day_offset;
+    int64_t ds_frozen_ns;
 };
 
 /*
@@ -348,6 +400,8 @@ static bool pcf_alarm_field(uint8_t alarm, uint8_t now, uint8_t mask)
     return (alarm & mask) == (now & mask);
 }
 
+static void ds_tick(PCF85263State *s);
+
 static void pcf_tick(void *opaque)
 {
     PCF85263State *s = opaque;
@@ -356,6 +410,10 @@ static void pcf_tick(void *opaque)
     uint8_t flags = 0, ints = 0;
     uint8_t pi;
 
+    if (s->ds_view) {
+        ds_tick(s);
+        return;
+    }
     if (pcf_stopped(s)) {
         return;
     }
@@ -563,10 +621,289 @@ static void pcf_write(PCF85263State *s, uint8_t reg, uint8_t val)
     }
 }
 
+/*
+ * DS1337 register view
+ */
+
+static bool ds_stopped(PCF85263State *s)
+{
+    return s->ds[DS_CONTROL] & DS_CTRL_NEOSC;
+}
+
+static int64_t ds_now_ns(PCF85263State *s)
+{
+    return ds_stopped(s) ? s->ds_frozen_ns : pcf_now_ns(s);
+}
+
+static void ds_time_to_regs(PCF85263State *s, int64_t t_ns)
+{
+    time_t secs = t_ns / NS_PER_SEC;
+    uint8_t *r = s->ds;
+    struct tm tm;
+
+    if (t_ns % NS_PER_SEC < 0) {
+        secs--;
+    }
+    gmtime_r(&secs, &tm);
+    r[DS_SECONDS] = to_bcd(tm.tm_sec);
+    r[DS_MINUTES] = to_bcd(tm.tm_min);
+    if (r[DS_HOURS] & DS_HOURS_12) {
+        int h = tm.tm_hour % 12;
+
+        r[DS_HOURS] = DS_HOURS_12 | (tm.tm_hour >= 12 ? DS_HOURS_PM : 0) |
+                      to_bcd(h ? h : 12);
+    } else {
+        r[DS_HOURS] = to_bcd(tm.tm_hour);
+    }
+    r[DS_DAY] = (tm.tm_wday + s->ds_day_offset) % 7 + 1;
+    r[DS_DATE] = to_bcd(tm.tm_mday);
+    r[DS_MONTH] = to_bcd(tm.tm_mon + 1) |
+                  (tm.tm_year >= 200 ? DS_MONTH_CENTURY : 0);
+    r[DS_YEAR] = to_bcd(tm.tm_year % 100);
+}
+
+/* Time written by the host; a write restarts the countdown chain at .0 */
+static int64_t ds_regs_to_time(PCF85263State *s)
+{
+    uint8_t *r = s->ds;
+    struct tm tm, check;
+    time_t secs;
+    int hour;
+
+    if (r[DS_HOURS] & DS_HOURS_12) {
+        hour = from_bcd(r[DS_HOURS] & 0x1f) % 12 +
+               ((r[DS_HOURS] & DS_HOURS_PM) ? 12 : 0);
+    } else {
+        hour = from_bcd(r[DS_HOURS] & 0x3f);
+    }
+    tm = (struct tm) {
+        .tm_sec = from_bcd(r[DS_SECONDS] & 0x7f),
+        .tm_min = from_bcd(r[DS_MINUTES] & 0x7f),
+        .tm_hour = hour,
+        .tm_mday = from_bcd(r[DS_DATE] & 0x3f),
+        .tm_mon = from_bcd(r[DS_MONTH] & 0x1f) - 1,
+        .tm_year = 100 + from_bcd(r[DS_YEAR]) +
+                   ((r[DS_MONTH] & DS_MONTH_CENTURY) ? 100 : 0),
+    };
+    secs = mktimegm(&tm);
+    gmtime_r(&secs, &check);
+    /* The day register is a free 1..7 counter: keep the written phase */
+    s->ds_day_offset = ((r[DS_DAY] & 7) - 1 - check.tm_wday + 14) % 7;
+    return (int64_t)secs * NS_PER_SEC;
+}
+
+static void ds_update_irq(PCF85263State *s)
+{
+    uint8_t c = s->ds[DS_CONTROL];
+    uint8_t st = s->ds[DS_STATUS];
+    bool a1 = (st & DS_STAT_A1F) && (c & DS_CTRL_A1IE);
+    bool a2 = (st & DS_STAT_A2F) && (c & DS_CTRL_A2IE);
+    bool inta, intb;
+
+    /* INTCN = 1: alarm 1 on INTA, alarm 2 on SQW/INTB; else both on INTA */
+    if (c & DS_CTRL_INTCN) {
+        inta = a1;
+        intb = a2;
+    } else {
+        inta = a1 || a2;
+        intb = false;
+    }
+    /* Open drain, active low */
+    qemu_set_irq(s->inta, !inta);
+    qemu_set_irq(s->intb, !intb);
+}
+
+static void ds_schedule_tick(PCF85263State *s)
+{
+    int64_t sub;
+
+    if (ds_stopped(s)) {
+        timer_del(s->tick_timer);
+        return;
+    }
+    sub = pcf_now_ns(s) % NS_PER_SEC;
+    if (sub < 0) {
+        sub += NS_PER_SEC;
+    }
+    timer_mod(s->tick_timer, qemu_clock_get_ns(rtc_clock) + NS_PER_SEC - sub);
+}
+
+static bool ds_alarm_field(uint8_t alarm, uint8_t now)
+{
+    return (alarm & DS_ALARM_MASK) || (alarm & 0x7f) == (now & 0x7f);
+}
+
+static bool ds_alarm_daydate(PCF85263State *s, uint8_t alarm)
+{
+    if (alarm & DS_ALARM_MASK) {
+        return true;
+    }
+    if (alarm & DS_ALARM_DY) {
+        return (alarm & 0x0f) == s->ds[DS_DAY];
+    }
+    return (alarm & 0x3f) == s->ds[DS_DATE];
+}
+
+/* Once per second: alarm comparison, flags are set regardless of A1IE/A2IE */
+static void ds_tick(PCF85263State *s)
+{
+    uint8_t *r = s->ds;
+
+    if (ds_stopped(s)) {
+        return;
+    }
+    if (!s->ds_time_dirty) {
+        /* Round to the second that just started */
+        ds_time_to_regs(s, pcf_now_ns(s) + NS_PER_SEC / 2);
+    }
+    if (ds_alarm_field(r[DS_A1_SECONDS], r[DS_SECONDS]) &&
+        ds_alarm_field(r[DS_A1_MINUTES], r[DS_MINUTES]) &&
+        ds_alarm_field(r[DS_A1_HOURS], r[DS_HOURS]) &&
+        ds_alarm_daydate(s, r[DS_A1_DAYDATE])) {
+        r[DS_STATUS] |= DS_STAT_A1F;
+    }
+    /* Alarm 2 has minute resolution */
+    if (r[DS_SECONDS] == 0 &&
+        ds_alarm_field(r[DS_A2_MINUTES], r[DS_MINUTES]) &&
+        ds_alarm_field(r[DS_A2_HOURS], r[DS_HOURS]) &&
+        ds_alarm_daydate(s, r[DS_A2_DAYDATE])) {
+        r[DS_STATUS] |= DS_STAT_A2F;
+    }
+    ds_update_irq(s);
+    ds_schedule_tick(s);
+}
+
+static void ds_write_control(PCF85263State *s, uint8_t val)
+{
+    bool was = ds_stopped(s);
+    bool stop = val & DS_CTRL_NEOSC;
+
+    if (!was && stop) {
+        /* Oscillator stopped: the time freezes and OSF is raised */
+        s->ds_frozen_ns = pcf_now_ns(s);
+        s->ds[DS_STATUS] |= DS_STAT_OSF;
+    } else if (was && !stop) {
+        s->offset_ns = s->ds_frozen_ns - pcf_ref_ns();
+    }
+    s->ds[DS_CONTROL] = val & DS_CTRL_RW_MASK;
+    if (!(val & DS_CTRL_INTCN)) {
+        qemu_log_mask(LOG_UNIMP, "%s: DS1337 square wave output (INTCN = 0) "
+                      "not modelled\n", TYPE_PCF85263);
+    }
+    ds_schedule_tick(s);
+    ds_update_irq(s);
+}
+
+static void ds_write(PCF85263State *s, uint8_t reg, uint8_t val)
+{
+    switch (reg) {
+    case DS_SECONDS ... DS_YEAR:
+        /* Applied as a whole at the end of the transfer */
+        s->ds[reg] = val;
+        s->ds_time_dirty = true;
+        break;
+    case DS_A1_SECONDS ... DS_A2_DAYDATE:
+        s->ds[reg] = val;
+        break;
+    case DS_CONTROL:
+        ds_write_control(s, val);
+        break;
+    case DS_STATUS:
+        /* OSF, A2F and A1F can only be cleared */
+        s->ds[reg] &= val | ~DS_STAT_FLAGS;
+        ds_update_irq(s);
+        break;
+    default:
+        g_assert_not_reached();
+    }
+}
+
+static void ds_commit_time(PCF85263State *s)
+{
+    int64_t t;
+
+    if (!s->ds_time_dirty) {
+        return;
+    }
+    s->ds_time_dirty = false;
+    t = ds_regs_to_time(s);
+    if (ds_stopped(s)) {
+        s->ds_frozen_ns = t;
+    } else {
+        s->offset_ns = t - pcf_ref_ns();
+    }
+    ds_schedule_tick(s);
+}
+
+static int ds_event(PCF85263State *s, enum i2c_event event)
+{
+    switch (event) {
+    case I2C_START_SEND:
+        s->addr_received = false;
+        /* fall through */
+    case I2C_START_RECV:
+        /* Time registers are latched for the duration of the transfer */
+        if (!s->ds_time_dirty) {
+            ds_time_to_regs(s, ds_now_ns(s));
+        }
+        break;
+    case I2C_FINISH:
+        ds_commit_time(s);
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
+static int ds_send(PCF85263State *s, uint8_t data)
+{
+    if (!s->addr_received) {
+        s->ptr = data & (DS_NUM_REGS - 1);
+        s->addr_received = true;
+        if (data >= DS_NUM_REGS) {
+            qemu_log_mask(LOG_GUEST_ERROR, "%s: DS1337 register 0x%02x out "
+                          "of range\n", TYPE_PCF85263, data);
+        }
+        return 0;
+    }
+    ds_write(s, s->ptr, data);
+    s->ptr = (s->ptr + 1) % DS_NUM_REGS;
+    return 0;
+}
+
+static uint8_t ds_recv(PCF85263State *s)
+{
+    uint8_t val = s->ds[s->ptr];
+
+    s->ptr = (s->ptr + 1) % DS_NUM_REGS;
+    return val;
+}
+
+static void ds_reset(PCF85263State *s)
+{
+    uint8_t hours12 = s->ds[DS_HOURS] & DS_HOURS_12;
+
+    memset(&s->ds[DS_A1_SECONDS], 0, DS_A2_DAYDATE - DS_A1_SECONDS + 1);
+    s->ds[DS_CONTROL] = DS_CTRL_RESET;
+    /* Battery backed: OSF stays clear and the clock keeps running */
+    s->ds[DS_STATUS] = 0;
+    s->ds[DS_HOURS] = hours12;
+    s->ds_time_dirty = false;
+    s->ptr = 0;
+    s->addr_received = false;
+    ds_time_to_regs(s, pcf_now_ns(s));
+    ds_schedule_tick(s);
+    ds_update_irq(s);
+}
+
 static int pcf_event(I2CSlave *i2c, enum i2c_event event)
 {
     PCF85263State *s = PCF85263(i2c);
 
+    if (s->ds_view) {
+        return ds_event(s, event);
+    }
     switch (event) {
     case I2C_START_SEND:
         s->addr_received = false;
@@ -585,6 +922,9 @@ static int pcf_send(I2CSlave *i2c, uint8_t data)
 {
     PCF85263State *s = PCF85263(i2c);
 
+    if (s->ds_view) {
+        return ds_send(s, data);
+    }
     if (!s->addr_received) {
         s->ptr = data;
         s->addr_received = true;
@@ -604,8 +944,12 @@ static int pcf_send(I2CSlave *i2c, uint8_t data)
 static uint8_t pcf_recv(I2CSlave *i2c)
 {
     PCF85263State *s = PCF85263(i2c);
-    uint8_t val = s->ptr < NUM_REGS ? s->regs[s->ptr] : 0;
+    uint8_t val;
 
+    if (s->ds_view) {
+        return ds_recv(s);
+    }
+    val = s->ptr < NUM_REGS ? s->regs[s->ptr] : 0;
     s->ptr = (s->ptr + 1) % NUM_REGS;
     return val;
 }
@@ -614,6 +958,10 @@ static void pcf_reset(DeviceState *dev)
 {
     PCF85263State *s = PCF85263(dev);
 
+    if (s->ds_view) {
+        ds_reset(s);
+        return;
+    }
     pcf_reset_control(s);
     memset(&s->regs[REG_TSR1], 0, REG_TSR_MODE - REG_TSR1 + 1);
     s->regs[REG_STOP_ENABLE] = 0;
@@ -633,6 +981,15 @@ static void pcf_realize(DeviceState *dev, Error **errp)
 {
     PCF85263State *s = PCF85263(dev);
 
+    if (!s->register_map || !strcmp(s->register_map, "ds1337")) {
+        s->ds_view = true;
+    } else if (!strcmp(s->register_map, "pcf85263")) {
+        s->ds_view = false;
+    } else {
+        error_setg(errp, "%s: register-map must be 'ds1337' or 'pcf85263'",
+                   TYPE_PCF85263);
+        return;
+    }
     s->tick_timer = timer_new_ns(rtc_clock, pcf_tick, s);
     s->pulse_timer = timer_new_ns(QEMU_CLOCK_VIRTUAL, pcf_pulse_end, s);
 }
@@ -655,7 +1012,13 @@ static void pcf_init(Object *obj)
 
 static int pcf_post_load(void *opaque, int version_id)
 {
-    pcf_schedule_tick(opaque);
+    PCF85263State *s = opaque;
+
+    if (s->ds_view) {
+        ds_schedule_tick(s);
+    } else {
+        pcf_schedule_tick(s);
+    }
     return 0;
 }
 
@@ -675,11 +1038,20 @@ static const VMStateDescription vmstate_pcf85263 = {
         VMSTATE_BOOL(pulse_a, PCF85263State),
         VMSTATE_BOOL(pulse_b, PCF85263State),
         VMSTATE_TIMER_PTR(pulse_timer, PCF85263State),
+        VMSTATE_UINT8_ARRAY(ds, PCF85263State, DS_NUM_REGS),
+        VMSTATE_BOOL(ds_time_dirty, PCF85263State),
+        VMSTATE_INT8(ds_day_offset, PCF85263State),
+        VMSTATE_INT64(ds_frozen_ns, PCF85263State),
         VMSTATE_END_OF_LIST()
     }
 };
 
 static const Property pcf_properties[] = {
+    /*
+     * "ds1337" (default when unset): DS1337 view used by the KICK kernel
+     * (rtc-ds1307); "pcf85263": native register map of the board's part.
+     */
+    DEFINE_PROP_STRING("register-map", PCF85263State, register_map),
     /* Length of an interrupt pulse when INTx_enable.ILP = 0 */
     DEFINE_PROP_UINT32("int-pulse-us", PCF85263State, int_pulse_us, 15625),
 };
