@@ -41,8 +41,12 @@ and commit are compiled in at build time (`--version`, Settings tab).
 KickEmu=Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app/Contents/MacOS/KickEmu
 
 $KickEmu                                  # kick machine, settings from Emulator/config/kickemu.json
+$KickEmu --profile demo --presentation    # bare-metal showcase (build Emulator/demo/baremetal first)
+$KickEmu --profile selftest               # vendor kernel + test initramfs, runs kick-selftest
 $KickEmu --profile virt-test              # stock QEMU virt + virtio GPU/multitouch (no kick machine needed)
+$KickEmu --set qemu.boot=uboot            # U-Boot proper (boot.uboot_image at boot.uboot_load_addr)
 $KickEmu --set qemu.accel=tcg --set qemu.boot=rom
+$KickEmu --set boot.sdma_firmware=/path/to/sdma-imx7d.bin   # needed for UART RX DMA, see docs/soc.md
 $KickEmu --print-command                  # show the QEMU command line
 $KickEmu --headless                       # no window; log and console on stdout, exits with QEMU
 $KickEmu --help

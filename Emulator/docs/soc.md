@@ -38,6 +38,7 @@ qemu-system-aarch64 -M kick,boot-mode=rom,emmc=emmc -accel tcg -cpu cortex-a53 .
 | `cv-chardev` | none | chardev for the CV/gate converter host protocol |
 | `audiodev` | none | audiodev for SAI2 (generic machine property) |
 | `panel-width`, `panel-height` | 1024, 600 | LCDIF scan-out size before the guest sets a mode |
+| `sdma-firmware` | none | `sdma-imx7d.bin` of the guest rootfs; its header gives the RAM script entry points (see below) |
 | `power-key-press-ms` | 200 | how long `system_powerdown` holds the SNVS ON/OFF button |
 | `gt911-reset-wired` | off | connect GPIO5_IO03 to the GT911 RSTB (see "Board") |
 
@@ -243,9 +244,12 @@ to host pages; the fault handler already works per host page.
   the ROM boot info are 0.
 - U-Boot proper (DART config) finds no SOM EEPROM (I2C1 0x52 is not modelled) and reports
   512 MiB DRAM; it expects its PHY at MDIO address 0.
-- Audio capture: `kick-selftest` hangs in `arecord` (SAI2 RX through SDMA2 event 2); the SAI
-  RX FIFO overflows from boot on (`Receive overflow detected`). To be looked at with the audio
-  models.
+- SDMA RAM scripts: the model runs script semantics, not the SDMA ISA. With the RAM firmware
+  (the KICK rootfs ships `firmware-imx`) the 5.4 driver takes every entry point from the
+  firmware header, and `uart_2_mcu` has no ROM entry in that kernel, so UART receive DMA
+  (MCU on ttymxc0, MIDI on ttymxc2) only works with `sdma-firmware` naming the same file.
+  The firmware is not shipped (NXP EULA). Without it the test image falls back to ROM scripts:
+  UART TX DMA and SAI audio work, UART RX DMA does not.
 
 ## Tests
 
