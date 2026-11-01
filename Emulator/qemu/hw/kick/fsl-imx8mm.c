@@ -212,7 +212,7 @@ static void fsl_imx8mm_init(Object *obj)
 
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         g_autofree char *name = g_strdup_printf("uart%d", i + 1);
-        object_initialize_child(obj, name, &s->uart[i], TYPE_IMX_SERIAL);
+        object_initialize_child(obj, name, &s->uart[i], TYPE_IMX8MM_UART);
     }
     for (i = 0; i < FSL_IMX8MM_NUM_GPTS; i++) {
         g_autofree char *name = g_strdup_printf("gpt%d", i + 1);
@@ -479,14 +479,19 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
     };
     int i;
 
-    /* UART1..4 on serial_hd(0..3) */
+    /*
+     * UART1..4 on serial_hd(0..3). The UART raises its interrupt through
+     * the named "irq" output (the sysbus IRQ feeds its DMA request logic).
+     */
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         qdev_prop_set_chr(DEVICE(&s->uart[i]), "chardev", serial_hd(i));
         if (!fsl_imx8mm_sysbus(s, &s->uart[i],
                                fsl_imx8mm_memmap[uart_mmap[i]].addr,
-                               uart_irq[i], errp)) {
+                               -1, errp)) {
             return false;
         }
+        qdev_connect_gpio_out_named(DEVICE(&s->uart[i]), IMX8MM_UART_GPIO_IRQ,
+                                    0, fsl_imx8mm_irq(s, uart_irq[i]));
     }
 
     /* GPT1..4 have their own SPI, GPT5 and GPT6 share one */
@@ -541,6 +546,13 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
         hwaddr base = MMAP(USDHC1) + i * 0x10000;
         DeviceState *orirq = DEVICE(&s->usdhc_irq[i]);
 
+        /*
+         * The 8MM uSDHC raises INT_STATUS.TC when the busy signalling of
+         * an R1b command ends; the 5.4 esdhc driver relies on it
+         * (MMC_CAP_WAIT_WHILE_BUSY) for eMMC CMD6. The generic imx-usdhc
+         * model suppresses that interrupt.
+         */
+        s->usdhc[i].quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
         qdev_prop_set_uint16(orirq, "num-lines", 2);
         if (!qdev_realize(orirq, NULL, errp)) {
             return false;
@@ -640,6 +652,14 @@ static bool fsl_imx8mm_realize_optional(FslImx8mmState *s, Error **errp)
             continue;
         }
         sbd = SYS_BUS_DEVICE(dev);
+        /*
+         * The SAI models take their master clock as a property; MCLK1 is
+         * the SAIn clock root, which the DT assigns to AUDIO_PLL1 at
+         * 12.288 MHz (assigned-clock-rates in the sai nodes).
+         */
+        if (!strcmp(o->type, TYPE_KICK_IMX8MM_SAI)) {
+            qdev_prop_set_uint32(dev, "mclk1-hz", s->sai_mclk_hz);
+        }
         /* Bus masters get the system address space for their DMA */
         if (object_property_find(OBJECT(dev), "dma-mr")) {
             object_property_set_link(OBJECT(dev), "dma-mr",
@@ -681,6 +701,47 @@ static bool fsl_imx8mm_realize_optional(FslImx8mmState *s, Error **errp)
     return true;
 }
 
+/*
+ * SDMA event inputs (imx8mm.dtsi "dmas"): the UARTs request SDMA1, the
+ * SAIs SDMA2. Wired only when the SDMA model is built in.
+ */
+static void fsl_imx8mm_wire_dma(FslImx8mmState *s)
+{
+    static const struct {
+        const char *dev;    /* NULL: one of the UARTs (index in uart) */
+        int uart;
+        const char *sdma;
+        int rx_event;
+        int tx_event;
+    } map[] = {
+        { NULL, 0, "sdma1", 22, 23 },   /* UART1 */
+        { NULL, 2, "sdma1", 26, 27 },   /* UART3 */
+        { NULL, 3, "sdma1", 28, 29 },   /* UART4 */
+        { "sai1", 0, "sdma2", 0, 1 },
+        { "sai2", 0, "sdma2", 2, 3 },
+        { "sai3", 0, "sdma2", 4, 5 },
+        { "sai5", 0, "sdma2", 8, 9 },
+        { "sai6", 0, "sdma2", 10, 11 },
+    };
+
+    for (int i = 0; i < ARRAY_SIZE(map); i++) {
+        DeviceState *sdma = fsl_imx8mm_get_optional(s, map[i].sdma);
+        DeviceState *dev = map[i].dev ?
+            fsl_imx8mm_get_optional(s, map[i].dev) :
+            DEVICE(&s->uart[map[i].uart]);
+
+        if (!sdma || !dev) {
+            continue;
+        }
+        qdev_connect_gpio_out_named(dev, "dma-rx", 0,
+                                    qdev_get_gpio_in_named(sdma, "events",
+                                                           map[i].rx_event));
+        qdev_connect_gpio_out_named(dev, "dma-tx", 0,
+                                    qdev_get_gpio_in_named(sdma, "events",
+                                                           map[i].tx_event));
+    }
+}
+
 static bool fsl_imx8mm_add_ram(FslImx8mmState *s, MemoryRegion *mr, int id,
                                const char *name, Error **errp)
 {
@@ -716,6 +777,7 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
         !fsl_imx8mm_realize_optional(s, errp)) {
         return;
     }
+    fsl_imx8mm_wire_dma(s);
 
     /*
      * On-chip memories. The boot ROM window is a ROM region the BootROM
@@ -785,6 +847,8 @@ static const Property fsl_imx8mm_properties[] = {
     DEFINE_PROP_BOOL("has-el2", FslImx8mmState, has_el2, false),
     DEFINE_PROP_BOOL("enet-phy-connected", FslImx8mmState,
                      enet_phy_connected, true),
+    /* SAIn MCLK1 (SAIn clock root) as assigned by the board DT */
+    DEFINE_PROP_UINT32("sai-mclk-hz", FslImx8mmState, sai_mclk_hz, 12288000),
 };
 
 static void fsl_imx8mm_class_init(ObjectClass *oc, const void *data)

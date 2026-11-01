@@ -40,6 +40,7 @@
 #include "imx8mm_src.h"
 #include "imx8mm_sysctr.h"
 #include "imx8mm_tmu.h"
+#include "imx8mm_uart.h"
 #include "vivante_gpu.h"
 
 #define TYPE_FSL_IMX8MM "fsl-imx8mm"
@@ -302,7 +303,7 @@ struct FslImx8mmState {
     IMXGPTState         gpt[FSL_IMX8MM_NUM_GPTS];
     OrIRQState          gpt5_gpt6_irq;
     IMXGPIOState        gpio[FSL_IMX8MM_NUM_GPIOS];
-    IMXSerialState      uart[FSL_IMX8MM_NUM_UARTS];
+    IMX8MMUARTState     uart[FSL_IMX8MM_NUM_UARTS];
     IMXI2CState         i2c[FSL_IMX8MM_NUM_I2CS];
     IMXSPIState         spi[FSL_IMX8MM_NUM_ECSPIS];
     SDHCIState          usdhc[FSL_IMX8MM_NUM_USDHCS];
@@ -332,6 +333,7 @@ struct FslImx8mmState {
     bool                has_el3;
     bool                has_el2;
     bool                enet_phy_connected;
+    uint32_t            sai_mclk_hz;
 
     /* Optional peripherals, see fsl_imx8mm_get_optional() */
     GHashTable         *optional;
