@@ -151,6 +151,9 @@ const FslImx8mmMemMapEntry fsl_imx8mm_memmap[FSL_IMX8MM_NUM_MEMORY_REGIONS] = {
 
 #define MMAP(id)    (fsl_imx8mm_memmap[FSL_IMX8MM_##id].addr)
 
+/* DISPMIX SFT_RSTN bit that drives MIPI_DSI_I_PRESET */
+#define FSL_IMX8MM_DISPMIX_RST_DSI_PRESET   5
+
 /*
  * Optional peripherals: model name, instance name, memory map entry of
  * MMIO region 0 (and 1), and up to two interrupts (-1 = none). SAI5 and
@@ -182,14 +185,6 @@ static const FslImx8mmOptional fsl_imx8mm_optional[] = {
       { FSL_IMX8MM_SDMA2_IRQ, -1 } },
     { TYPE_KICK_IMX8MM_SDMA, "sdma3", { FSL_IMX8MM_SDMA3, -1 },
       { FSL_IMX8MM_SDMA3_IRQ, -1 } },
-    { TYPE_KICK_IMX8MM_LCDIF, "lcdif", { FSL_IMX8MM_LCDIF, -1 },
-      { FSL_IMX8MM_LCDIF_IRQ, -1 } },
-    { TYPE_KICK_IMX8MM_MIPI_DSIM, "mipi-dsim", { FSL_IMX8MM_MIPI_DSI, -1 },
-      { FSL_IMX8MM_MIPI_DSI_IRQ, -1 } },
-    { TYPE_KICK_IMX8MM_DISPMIX, "dispmix", { FSL_IMX8MM_DISP_BLK_CTRL, -1 },
-      { -1, -1 } },
-    { TYPE_KICK_IMX8MM_GPU, "gpu", { FSL_IMX8MM_GPU3D, FSL_IMX8MM_GPU2D },
-      { FSL_IMX8MM_GPU3D_IRQ, FSL_IMX8MM_GPU2D_IRQ } },
 };
 
 DeviceState *fsl_imx8mm_get_optional(FslImx8mmState *s, const char *name)
@@ -255,6 +250,11 @@ static void fsl_imx8mm_init(Object *obj)
         object_initialize_child(obj, name, &s->wdt[i], TYPE_IMX2_WDT);
     }
     object_initialize_child(obj, "enet1", &s->enet, TYPE_IMX_ENET);
+    object_initialize_child(obj, "dispmix", &s->dispmix, TYPE_IMX8MM_DISPMIX);
+    object_initialize_child(obj, "lcdif", &s->lcdif, TYPE_IMX8MM_LCDIF);
+    object_initialize_child(obj, "mipi-dsim", &s->dsim, TYPE_IMX8MM_MIPI_DSIM);
+    object_initialize_child(obj, "gpu3d", &s->gpu3d, TYPE_IMX8MM_GPU3D);
+    object_initialize_child(obj, "gpu2d", &s->gpu2d, TYPE_IMX8MM_GPU2D);
 
     /* Optional peripherals that are compiled in */
     s->optional = g_hash_table_new(g_str_hash, g_str_equal);
@@ -592,6 +592,41 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
     return true;
 }
 
+/*
+ * Display mix (block control), LCDIF, MIPI DSIM and the Vivante GC7000UL /
+ * GC520L cores. The LCDIF and the GPU cores master the system bus. The
+ * DSIM's MIPI_DSI_I_PRESET input follows DISPMIX soft reset bit 5, so
+ * software has to release it as the vendor reset driver does.
+ */
+static bool fsl_imx8mm_realize_display(FslImx8mmState *s, Error **errp)
+{
+    Object *sysmem = OBJECT(get_system_memory());
+
+    object_property_set_link(OBJECT(&s->lcdif), "dma-mr", sysmem,
+                             &error_abort);
+    object_property_set_link(OBJECT(&s->gpu3d), "dma-mr", sysmem,
+                             &error_abort);
+    object_property_set_link(OBJECT(&s->gpu2d), "dma-mr", sysmem,
+                             &error_abort);
+
+    if (!fsl_imx8mm_sysbus(s, &s->dispmix, MMAP(DISP_BLK_CTRL), -1, errp) ||
+        !fsl_imx8mm_sysbus(s, &s->lcdif, MMAP(LCDIF), FSL_IMX8MM_LCDIF_IRQ,
+                           errp) ||
+        !fsl_imx8mm_sysbus(s, &s->dsim, MMAP(MIPI_DSI),
+                           FSL_IMX8MM_MIPI_DSI_IRQ, errp) ||
+        !fsl_imx8mm_sysbus(s, &s->gpu3d, MMAP(GPU3D), FSL_IMX8MM_GPU3D_IRQ,
+                           errp) ||
+        !fsl_imx8mm_sysbus(s, &s->gpu2d, MMAP(GPU2D), FSL_IMX8MM_GPU2D_IRQ,
+                           errp)) {
+        return false;
+    }
+    qdev_connect_gpio_out_named(DEVICE(&s->dispmix), "sft-rstn",
+                                FSL_IMX8MM_DISPMIX_RST_DSI_PRESET,
+                                qdev_get_gpio_in_named(DEVICE(&s->dsim),
+                                                       "reset-n", 0));
+    return true;
+}
+
 static bool fsl_imx8mm_realize_optional(FslImx8mmState *s, Error **errp)
 {
     DeviceState *sai56_or = NULL;
@@ -677,6 +712,7 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
         !fsl_imx8mm_realize_clocks(s, errp) ||
         !fsl_imx8mm_realize_system(s, errp) ||
         !fsl_imx8mm_realize_peripherals(s, errp) ||
+        !fsl_imx8mm_realize_display(s, errp) ||
         !fsl_imx8mm_realize_optional(s, errp)) {
         return;
     }

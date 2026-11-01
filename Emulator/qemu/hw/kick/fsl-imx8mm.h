@@ -30,13 +30,17 @@
 #include "imx8mm_anatop.h"
 #include "imx8mm_ccm.h"
 #include "imx8mm_cqhci.h"
+#include "imx8mm_dispmix.h"
 #include "imx8mm_gpc.h"
 #include "imx8mm_iomuxc.h"
+#include "imx8mm_lcdif.h"
+#include "imx8mm_mipi_dsim.h"
 #include "imx8mm_ocotp.h"
 #include "imx8mm_snvs.h"
 #include "imx8mm_src.h"
 #include "imx8mm_sysctr.h"
 #include "imx8mm_tmu.h"
+#include "vivante_gpu.h"
 
 #define TYPE_FSL_IMX8MM "fsl-imx8mm"
 OBJECT_DECLARE_SIMPLE_TYPE(FslImx8mmState, FSL_IMX8MM)
@@ -307,6 +311,13 @@ struct FslImx8mmState {
     IMX2WdtState        wdt[FSL_IMX8MM_NUM_WDTS];
     IMXFECState         enet;
 
+    /* Display path and GPU (docs/display-gpu.md) */
+    IMX8MMDispMixState  dispmix;
+    IMX8MMLCDIFState    lcdif;
+    IMX8MMMipiDsimState dsim;
+    VivGpuState         gpu3d;
+    VivGpuState         gpu2d;
+
     MemoryRegion        boot_rom;
     MemoryRegion        ocram;
     MemoryRegion        ocram_s;
@@ -333,10 +344,6 @@ struct FslImx8mmState {
  * unimplemented-device. The names are the contract between the SoC and the
  * device model authors.
  */
-#define TYPE_KICK_IMX8MM_DISPMIX    "imx8mm-dispmix"
-#define TYPE_KICK_IMX8MM_GPU        "imx8mm-gpu"
-#define TYPE_KICK_IMX8MM_LCDIF      "imx8mm-lcdif"
-#define TYPE_KICK_IMX8MM_MIPI_DSIM  "imx8mm-mipi-dsim"
 #define TYPE_KICK_IMX8MM_SAI        "imx8mm-sai"
 #define TYPE_KICK_IMX8MM_SDMA       "imx8mm-sdma"
 
