@@ -27,6 +27,14 @@
  *   restart the DMA, which U-Boot never does. When it pauses there, the
  *   model resumes it at the current address before the guest sees the
  *   status (the DMA interrupt does not exist for this case on the uSDHC).
+ * - MIX_CTRL.AC23EN (bit 7) makes the uSDHC send CMD23 (SET_BLOCK_COUNT)
+ *   with the argument in DS_ADDR (ARGUMENT2) before a multi-block CMD18 or
+ *   CMD25. Linux uses it for every multi-block eMMC transfer
+ *   (SDHCI_AUTO_CMD23, mapped to AC23EN by sdhci-esdhc-imx), so it sends
+ *   no CMD12. The generic model ignores the bit; the card then stays in the
+ *   data or receive state after the last block, the next command is
+ *   illegal and the first write hangs in "card stuck in wrong state". The
+ *   model issues the CMD23 itself when the command register is written.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -36,6 +44,7 @@
 #include "qapi/error.h"
 #include "hw/core/resettable.h"
 #include "hw/core/sysbus.h"
+#include "hw/sd/sd.h"
 
 #include "imx8mm_usdhc.h"
 
@@ -55,6 +64,14 @@
 #define PRNSTS_DOING_READ       0x0200
 #define NIS_DMA                 0x0008
 #define HOSTCTL1_DMA_MASK       0x18    /* 0 = SDMA */
+
+/* Transfer mode as kept from MIX_CTRL, and the command register at 0x0e */
+#define USDHC_XFER_CMD          0x0c
+#define MIX_CTRL_AC23EN         0x0080
+#define TRNS_MULTI              0x0020
+#define CMD_SET_BLOCK_COUNT     23
+#define CMD_READ_MULTIPLE       18
+#define CMD_WRITE_MULTIPLE      25
 
 static void imx8mm_usdhc_status_enable_reset(SDHCIState *p)
 {
@@ -120,6 +137,41 @@ static void imx8mm_usdhc_status_write(void *opaque, hwaddr offset,
                         size);
 }
 
+static uint64_t imx8mm_usdhc_xfer_read(void *opaque, hwaddr offset,
+                                       unsigned size)
+{
+    SDHCIState *p = SYSBUS_SDHCI(opaque);
+
+    return p->iomem.ops->read(p->iomem.opaque, USDHC_XFER_CMD + offset, size);
+}
+
+static void imx8mm_usdhc_xfer_write(void *opaque, hwaddr offset,
+                                    uint64_t value, unsigned size)
+{
+    SDHCIState *p = SYSBUS_SDHCI(opaque);
+    /* The command index is bits [29:24] of the 32-bit register */
+    uint64_t index_shift = 24 - offset * 8;
+    bool has_index = offset <= 3 && offset + size > 3;
+    unsigned cmd = has_index ? (value >> index_shift) & 0x3f : 0;
+
+    if (has_index && (p->trnmod & MIX_CTRL_AC23EN) &&
+        (p->trnmod & TRNS_MULTI) &&
+        (cmd == CMD_READ_MULTIPLE || cmd == CMD_WRITE_MULTIPLE)) {
+        SDRequest req = { .cmd = CMD_SET_BLOCK_COUNT, .arg = p->sdmasysad };
+        uint8_t resp[16];
+
+        sdbus_do_command(&p->sdbus, &req, resp, sizeof(resp));
+    }
+    p->iomem.ops->write(p->iomem.opaque, USDHC_XFER_CMD + offset, value, size);
+}
+
+static const MemoryRegionOps imx8mm_usdhc_xfer_ops = {
+    .read = imx8mm_usdhc_xfer_read,
+    .write = imx8mm_usdhc_xfer_write,
+    .endianness = DEVICE_LITTLE_ENDIAN,
+    .valid = { .min_access_size = 1, .max_access_size = 4 },
+};
+
 static const MemoryRegionOps imx8mm_usdhc_status_ops = {
     .read = imx8mm_usdhc_status_read,
     .write = imx8mm_usdhc_status_write,
@@ -179,6 +231,10 @@ static void imx8mm_usdhc_realize(DeviceState *dev, Error **errp)
                           p, TYPE_IMX8MM_USDHC ".int-status", 4);
     memory_region_add_subregion_overlap(&s->container, USDHC_INT_STATUS,
                                         &s->status, 1);
+    memory_region_init_io(&s->xfer, OBJECT(dev), &imx8mm_usdhc_xfer_ops,
+                          p, TYPE_IMX8MM_USDHC ".xfer-cmd", 4);
+    memory_region_add_subregion_overlap(&s->container, USDHC_XFER_CMD,
+                                        &s->xfer, 1);
 }
 
 static void imx8mm_usdhc_class_init(ObjectClass *klass, const void *data)

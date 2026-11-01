@@ -25,6 +25,7 @@ struct IMX8MMUSDHCState {
     MemoryRegion parent_alias;
     MemoryRegion sysctl;
     MemoryRegion status;
+    MemoryRegion xfer;
 };
 
 #endif /* KICK_IMX8MM_USDHC_H */

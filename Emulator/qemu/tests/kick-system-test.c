@@ -1,11 +1,13 @@
 /*
  * qtest for the i.MX8MM system control models of the kick machine:
- * SRC, GPC, IOMUXC/GPR, TMU, SNVS, system counter and the uSDHC CQHCI.
+ * SRC, GPC, IOMUXC/GPR, TMU, SNVS, system counter, the uSDHC CQHCI and the
+ * uSDHC auto CMD23.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 
 #include "qemu/osdep.h"
+#include "qemu/bswap.h"
 #include "qemu/timer.h"
 #include "libqtest.h"
 #include "qobject/qdict.h"
@@ -228,6 +230,126 @@ static void test_cqhci(void)
     qtest_quit(qts);
 }
 
+/* uSDHC registers and command flags (SDHCI command register, upper half) */
+#define USDHC_ARG2      0x00
+#define USDHC_BLK_ATT   0x04
+#define USDHC_CMD_ARG   0x08
+#define USDHC_XFER_CMD  0x0c
+#define USDHC_RSP0      0x10
+#define USDHC_DATA      0x20
+#define USDHC_SYS_CTRL  0x2c
+#define USDHC_INT_STS   0x30
+#define USDHC_MIX_CTRL  0x48
+#define RSP_136         0x01
+#define RSP_48          0x02
+#define RSP_48B         0x03
+#define RSP_CRC         0x08
+#define RSP_IDX         0x10
+#define CMD_DATA        0x20
+#define MIX_BCEN        0x02
+#define MIX_READ        0x10
+#define MIX_MULTI       0x20
+#define MIX_AC23EN      0x80
+#define EMMC_RCA        0x00010000
+#define EMMC_BLOCKS     2
+
+static uint32_t usdhc_cmd(QTestState *qts, int index, uint32_t arg,
+                          uint32_t flags)
+{
+    qtest_writel(qts, USDHC3_BASE + USDHC_CMD_ARG, arg);
+    qtest_writel(qts, USDHC3_BASE + USDHC_XFER_CMD,
+                 ((index << 8) | flags) << 16);
+    qtest_writel(qts, USDHC3_BASE + USDHC_INT_STS, 0x1);   /* CC */
+    return qtest_readl(qts, USDHC3_BASE + USDHC_RSP0);
+}
+
+/* CURRENT_STATE of the card status (R1), 4 = tran */
+static int emmc_state(QTestState *qts)
+{
+    uint32_t r1 = usdhc_cmd(qts, 13, EMMC_RCA, RSP_48 | RSP_CRC | RSP_IDX);
+
+    return (r1 >> 9) & 0xf;
+}
+
+/*
+ * Linux sends multi-block eMMC transfers with Auto CMD23 (MIX_CTRL.AC23EN,
+ * block count in DS_ADDR) and no CMD12: after the last block the card must
+ * be back in the transfer state on its own.
+ */
+static void test_usdhc_auto_cmd23(void)
+{
+    g_autofree char *path = NULL;
+    g_autofree char *args = NULL;
+    uint8_t image[EMMC_BLOCKS * 512];
+    QTestState *qts;
+    int fd, i;
+
+    fd = g_file_open_tmp("kick-emmc-XXXXXX", &path, NULL);
+    g_assert_cmpint(fd, >=, 0);
+    g_assert_cmpint(ftruncate(fd, 4 * 1024 * 1024), ==, 0);
+    for (i = 0; i < sizeof(image); i++) {
+        image[i] = i * 7 + 3;
+    }
+    g_assert_cmpint(pwrite(fd, image, sizeof(image), 0), ==, sizeof(image));
+    args = g_strdup_printf("-M kick,emmc=emmc "
+                           "-drive if=none,id=emmc,format=raw,file=%s", path);
+    qts = qtest_init(args);
+
+    /* The card clock runs once SYS_CTRL is written (as every driver does) */
+    qtest_writel(qts, USDHC3_BASE + USDHC_SYS_CTRL,
+                 qtest_readl(qts, USDHC3_BASE + USDHC_SYS_CTRL));
+
+    /* Identification: CMD0, CMD1 until powered up, CMD2, CMD3, CMD7 */
+    usdhc_cmd(qts, 0, 0, 0);
+    for (i = 0; i < 10; i++) {
+        if (usdhc_cmd(qts, 1, 0x40ff8080, RSP_48) & 0x80000000) {
+            break;
+        }
+        qtest_clock_step(qts, 1000000);
+    }
+    g_assert_cmpint(i, <, 10);
+    usdhc_cmd(qts, 2, 0, RSP_136 | RSP_CRC);
+    usdhc_cmd(qts, 3, EMMC_RCA, RSP_48 | RSP_CRC | RSP_IDX);
+    usdhc_cmd(qts, 7, EMMC_RCA, RSP_48B | RSP_CRC | RSP_IDX);
+    g_assert_cmpint(emmc_state(qts), ==, 4);
+
+    /*
+     * CMD18 with Auto CMD23, PIO. ARGUMENT2 shares its register with the
+     * SDMA address (Linux uses Auto CMD23 with ADMA only), so it is written
+     * while the block count is still 0 and no SDMA transfer can start.
+     */
+    qtest_writel(qts, USDHC3_BASE + USDHC_MIX_CTRL,
+                 MIX_AC23EN | MIX_MULTI | MIX_READ | MIX_BCEN);
+    qtest_writel(qts, USDHC3_BASE + USDHC_ARG2, EMMC_BLOCKS);
+    qtest_writel(qts, USDHC3_BASE + USDHC_BLK_ATT, (EMMC_BLOCKS << 16) | 512);
+    usdhc_cmd(qts, 18, 0, RSP_48 | RSP_CRC | RSP_IDX | CMD_DATA);
+    for (i = 0; i < sizeof(image); i += 4) {
+        g_assert_cmphex(qtest_readl(qts, USDHC3_BASE + USDHC_DATA), ==,
+                        (uint32_t)ldl_le_p(&image[i]));
+    }
+    g_assert_cmpint(emmc_state(qts), ==, 4);
+
+    /* CMD25 with Auto CMD23 (reliable write flag in the argument, as Linux) */
+    qtest_writel(qts, USDHC3_BASE + USDHC_MIX_CTRL,
+                 MIX_AC23EN | MIX_MULTI | MIX_BCEN);
+    qtest_writel(qts, USDHC3_BASE + USDHC_ARG2, 0x80000000 | EMMC_BLOCKS);
+    qtest_writel(qts, USDHC3_BASE + USDHC_BLK_ATT, (EMMC_BLOCKS << 16) | 512);
+    usdhc_cmd(qts, 25, 0, RSP_48 | RSP_CRC | RSP_IDX | CMD_DATA);
+    for (i = 0; i < sizeof(image); i += 4) {
+        qtest_writel(qts, USDHC3_BASE + USDHC_DATA,
+                     ~(uint32_t)ldl_le_p(&image[i]));
+    }
+    g_assert_cmpint(emmc_state(qts), ==, 4);
+    qtest_quit(qts);
+
+    g_assert_cmpint(pread(fd, image, sizeof(image), 0), ==, sizeof(image));
+    g_assert_cmphex(image[0], ==, (uint8_t)~3);
+    g_assert_cmphex(image[sizeof(image) - 1], ==,
+                    (uint8_t)~((sizeof(image) - 1) * 7 + 3));
+    close(fd);
+    unlink(path);
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -239,6 +361,7 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/snvs", test_snvs);
     qtest_add_func("/kick/sysctr", test_sysctr);
     qtest_add_func("/kick/cqhci", test_cqhci);
+    qtest_add_func("/kick/usdhc-auto-cmd23", test_usdhc_auto_cmd23);
 
     return g_test_run();
 }
