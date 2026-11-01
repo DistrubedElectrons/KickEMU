@@ -331,10 +331,13 @@ static void test_mcu_2_shp_sai(void)
 
 static void test_unknown_script(void)
 {
-    QTestState *qts = sdma_init();
+    QTestState *qts = sdma_init_args("-global imx8mm-sdma.infer-scripts=off");
     const uint32_t greg[8] = { 0 };
 
-    /* A RAM script address (no firmware loaded): transfer fails visibly */
+    /*
+     * A RAM script address (no firmware, no inference): the transfer
+     * fails visibly
+     */
     sdma_wr(qts, EVTOVR, sdma_rd(qts, EVTOVR) | (1 << 4));
     load_context(qts, 4, 0x1822, greg);
     sdma_wr(qts, CHNPRI(4), 1);
@@ -345,6 +348,64 @@ static void test_unknown_script(void)
     g_assert_true(wait_intr(qts, 1 << 4));
     g_assert_cmphex(bd_status(qts, BD_CH) & (BD_DONE | BD_RROR), ==, BD_RROR);
     g_assert_cmphex(sdma_rd(qts, STOP_STAT) & (1 << 4), ==, 0);
+    qtest_quit(qts);
+}
+
+/*
+ * The same RAM address with inference (the default): no event is routed
+ * to the channel, so it is a memory channel and runs ap_2_ap.
+ */
+static void test_infer_memcpy(void)
+{
+    QTestState *qts = sdma_init();
+    const uint32_t greg[8] = { 0 };
+    int i;
+
+    for (i = 0; i < 16; i++) {
+        qtest_writeb(qts, BUF_A + i, 0x30 + i);
+        qtest_writeb(qts, BUF_B + i, 0);
+    }
+    sdma_wr(qts, EVTOVR, sdma_rd(qts, EVTOVR) | (1 << 4));
+    load_context(qts, 4, 0x1822, greg);
+    sdma_wr(qts, CHNPRI(4), 1);
+    write_bd(qts, BD_CH, 16, BD_DONE | BD_EXTD | BD_INTR, 0, BUF_A, BUF_B);
+    qtest_writel(qts, CCB + 64, BD_CH);
+    qtest_writel(qts, CCB + 68, BD_CH);
+    sdma_wr(qts, HSTART, 1 << 4);
+    g_assert_true(wait_intr(qts, 1 << 4));
+    g_assert_cmphex(bd_status(qts, BD_CH) & (BD_DONE | BD_RROR), ==, 0);
+    for (i = 0; i < 16; i++) {
+        g_assert_cmphex(qtest_readb(qts, BUF_B + i), ==, 0x30 + i);
+    }
+    qtest_quit(qts);
+}
+
+/*
+ * Inference for a peripheral channel: event 3 (SAI2 TX) and TDR0 as FIFO
+ * address at an unknown RAM PC behave as mcu_2_shp.
+ */
+static void test_infer_sai_tx(void)
+{
+    QTestState *qts = sdma_init();
+    const uint32_t greg[8] = { 0, 1 << 3, 0, 0, 0, 0, SAI + 0x20, 24 };
+
+    for (int i = 0; i < 64; i++) {
+        qtest_writel(qts, BUF_A + i * 4, 0x02000000 + i);
+    }
+    sai_setup_tx(qts);
+    sdma_wr(qts, CHNENBL(3), 1 << 2);
+    sdma_wr(qts, DSPOVR, sdma_rd(qts, DSPOVR) | (1 << 2));
+    load_context(qts, 2, 0x1a40, greg);
+    sdma_wr(qts, CHNPRI(2), 1);
+    write_bd(qts, BD_CH, 256, BD_DONE | BD_EXTD | BD_INTR, 0, BUF_A, 0);
+    qtest_writel(qts, CCB + 32, BD_CH);
+    qtest_writel(qts, CCB + 36, BD_CH);
+    sdma_wr(qts, HSTART, 1 << 2);
+    qtest_writel(qts, SAI + 0x008, 1);          /* FRDE */
+    qtest_clock_step(qts, 100 * 1000);
+    /* The FIFO was filled from the buffer, no error */
+    g_assert_cmpuint(qtest_readl(qts, SAI + 0x040) >> 16, >, 0);
+    g_assert_cmphex(bd_status(qts, BD_CH) & BD_RROR, ==, 0);
     qtest_quit(qts);
 }
 
@@ -430,6 +491,8 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/sdma/memcpy", test_memcpy);
     qtest_add_func("/kick/sdma/mcu-2-shp-sai", test_mcu_2_shp_sai);
     qtest_add_func("/kick/sdma/unknown-script", test_unknown_script);
+    qtest_add_func("/kick/sdma/infer-memcpy", test_infer_memcpy);
+    qtest_add_func("/kick/sdma/infer-sai-tx", test_infer_sai_tx);
     qtest_add_func("/kick/sdma/firmware-scripts", test_firmware_scripts);
     qtest_add_func("/kick/sdma/event-error", test_event_error);
     return g_test_run();

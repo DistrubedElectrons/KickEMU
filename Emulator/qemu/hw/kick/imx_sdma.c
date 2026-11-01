@@ -26,10 +26,20 @@
  *    The "firmware" property names the same file; its header is read for
  *    the RAM entry points (sdma_fw_scripts), which then run the semantics
  *    of the matching script. The RAM code itself is not interpreted.
- *  - A PC that is not one of those (for example mcu_2_ecspi, or a RAM
- *    script without the "firmware" property) is logged as LOG_UNIMP and
- *    the transfer is terminated with BD_RROR and an interrupt, so the
- *    driver reports an error instead of hanging.
+ *  - Script inference ("infer-scripts", on by default) covers a PC that is
+ *    none of those: the RAM entry points of a firmware the host does not
+ *    have, and PC 0, which the 5.4 driver loads for uart_2_mcu when no RAM
+ *    firmware was loaded. The semantics follow from what the driver set up
+ *    for the channel: with no DMA event routed to it (CHNENBL) it is a
+ *    memory channel (ap_2_ap); with an event, the peripheral FIFO address
+ *    in gReg[6] names the script: UART URXD (+0x00) uart_2_mcu, UART UTXD
+ *    (+0x40) mcu_2_app, SAI TDRn (+0x20..0x3c) mcu_2_shp, SAI RDRn
+ *    (+0xa0..0xbc) shp_2_mcu. The choice is logged once per channel and PC
+ *    with -d unimp.
+ *  - Anything else (for example mcu_2_ecspi), or any unknown PC with
+ *    inference off, is logged as LOG_UNIMP and the transfer is terminated
+ *    with BD_RROR and an interrupt, so the driver reports an error instead
+ *    of hanging.
  *
  * Script semantics (per context: gReg[6] peripheral FIFO address, gReg[7]
  * watermark in bytes; per BD: count, buffer address, command = access
@@ -202,6 +212,22 @@ static const struct {
     { 42, "sai_2_mcu",          SCRIPT_PER_2_MCU },
     { 43, "uart_2_mcu",         SCRIPT_UART_2_MCU },
     { 44, "uartsh_2_mcu",       SCRIPT_UART_2_MCU },
+};
+
+/*
+ * Script inference: peripheral FIFO registers by their offset in the
+ * peripheral's 64 KiB block (i.MX 8M Mini UART and SAI register maps)
+ */
+static const struct {
+    uint32_t first;
+    uint32_t last;
+    const char *name;
+    SDMAScriptKind kind;
+} sdma_infer_fifos[] = {
+    { 0x00, 0x00, "uart_2_mcu (UART URXD)",     SCRIPT_UART_2_MCU },
+    { 0x40, 0x40, "mcu_2_app (UART UTXD)",      SCRIPT_MCU_2_PER },
+    { 0x20, 0x3c, "mcu_2_shp (SAI TDR)",        SCRIPT_MCU_2_PER },
+    { 0xa0, 0xbc, "shp_2_mcu (SAI RDR)",        SCRIPT_PER_2_MCU },
 };
 
 #define SDMA_FW_MAGIC       0x414d4453      /* "SDMA" */
@@ -468,6 +494,49 @@ static uint32_t sdma_ctx_greg(IMXSDMAState *s, int ch, int n)
     return sdma_dm_read(s, SDMA_CTX_BASE + ch * sdma_ctx_words(s) + 2 + n);
 }
 
+/*
+ * Derive the script of a channel whose PC is not a known entry point from
+ * its event routing and peripheral address (see the header comment).
+ */
+static SDMAScriptKind sdma_infer_script(IMXSDMAState *s, int ch)
+{
+    IMXSDMAChannel *c = &s->chan[ch];
+    uint32_t per = sdma_ctx_greg(s, ch, 6);
+    SDMAScriptKind kind = SCRIPT_UNKNOWN;
+    const char *name = NULL;
+    int ev = -1, e;
+    unsigned i;
+
+    for (e = 0; e < IMX_SDMA_EVENTS; e++) {
+        if (s->chnenbl[e] & BIT(ch)) {
+            ev = e;
+            break;
+        }
+    }
+    if (ev < 0) {
+        kind = SCRIPT_AP_2_AP;
+        name = "ap_2_ap (no event)";
+    } else {
+        for (i = 0; i < ARRAY_SIZE(sdma_infer_fifos); i++) {
+            uint32_t off = per & 0xffff;
+
+            if (off >= sdma_infer_fifos[i].first &&
+                off <= sdma_infer_fifos[i].last && !(off & 3)) {
+                kind = sdma_infer_fifos[i].kind;
+                name = sdma_infer_fifos[i].name;
+                break;
+            }
+        }
+    }
+    if (kind != SCRIPT_UNKNOWN && c->logged_pc != c->pc + 1) {
+        c->logged_pc = c->pc + 1;
+        qemu_log_mask(LOG_UNIMP, "%s: channel %d: no script known at PC %u, "
+                      "running %s for event %d, FIFO 0x%08x\n",
+                      TYPE_IMX_SDMA, ch, c->pc, name, ev, per);
+    }
+    return kind;
+}
+
 static void sdma_start_script(IMXSDMAState *s, int ch)
 {
     IMXSDMAChannel *c = &s->chan[ch];
@@ -482,6 +551,10 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
             break;
         }
     }
+    c->inferred = SCRIPT_UNKNOWN;
+    if (c->script == s->nscripts && s->infer_scripts) {
+        c->inferred = sdma_infer_script(s, ch);
+    }
     c->bd = sdma_ldl(s, sdma_ccb(s, ch));
     c->bd_bytes = 0;
     c->fresh = false;
@@ -492,7 +565,7 @@ static void sdma_start_script(IMXSDMAState *s, int ch)
 static SDMAScriptKind sdma_kind(IMXSDMAState *s, IMXSDMAChannel *c)
 {
     return c->script < s->nscripts ? s->scripts[c->script].kind
-                                   : SCRIPT_UNKNOWN;
+                                   : c->inferred;
 }
 
 /* The channel ran out of work: clear HE, the script is done */
@@ -1162,8 +1235,8 @@ static void sdma_init(Object *obj)
 
 static const VMStateDescription vmstate_sdma_chan = {
     .name = "imx-sdma-channel",
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_BOOL(fresh, IMXSDMAChannel),
         VMSTATE_BOOL(active, IMXSDMAChannel),
@@ -1172,14 +1245,16 @@ static const VMStateDescription vmstate_sdma_chan = {
         VMSTATE_UINT32(script, IMXSDMAChannel),
         VMSTATE_UINT32(bd, IMXSDMAChannel),
         VMSTATE_UINT32(bd_bytes, IMXSDMAChannel),
+        VMSTATE_UINT32(inferred, IMXSDMAChannel),
+        VMSTATE_UINT32(logged_pc, IMXSDMAChannel),
         VMSTATE_END_OF_LIST()
     }
 };
 
 static const VMStateDescription vmstate_sdma = {
     .name = TYPE_IMX_SDMA,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32(mc0ptr, IMXSDMAState),
         VMSTATE_UINT32(intr, IMXSDMAState),
@@ -1222,6 +1297,8 @@ static const Property sdma_properties[] = {
     /* Recheck interval for a channel waiting for the CPU to return a BD */
     DEFINE_PROP_UINT32("bd-poll-us", IMXSDMAState, bd_poll_us, 100),
     DEFINE_PROP_STRING("firmware", IMXSDMAState, firmware),
+    /* Derive the script of an unknown PC from events and FIFO address */
+    DEFINE_PROP_BOOL("infer-scripts", IMXSDMAState, infer_scripts, true),
 };
 
 static void sdma_class_init(ObjectClass *klass, const void *data)

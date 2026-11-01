@@ -5,7 +5,8 @@
  * reset values, software reset, TX/RX FIFOs with line timing, RX/TX
  * thresholds, ageing timer, idle detect, the SDMA request lines, and the
  * SDMA1 uart_2_mcu / mcu_2_app scripts on events 22/23 as the driver sets
- * them up (cyclic RX with ageing close, chained TX BDs).
+ * them up (cyclic RX with ageing close, chained TX BDs), also at entry
+ * points the SDMA model has to infer (PC 0, unknown RAM script).
  *
  * UART1 is connected to a unix socket served by the test.
  *
@@ -120,7 +121,8 @@ typedef struct {
     char *path;
 } Fixture;
 
-static void fixture_init(Fixture *f)
+/* kick machine with UART1 on a socket; machine options appended to -M */
+static void fixture_init_opts(Fixture *f, const char *opts)
 {
     int srv;
 
@@ -128,10 +130,15 @@ static void fixture_init(Fixture *f)
     g_assert_nonnull(f->dir);
     f->path = g_build_filename(f->dir, "u.sock", NULL);
     srv = qtest_socket_server(f->path);
-    f->qts = qtest_initf("-M kick -serial unix:%s", f->path);
+    f->qts = qtest_initf("-M kick%s -serial unix:%s", opts, f->path);
     f->sock = accept(srv, NULL, NULL);
     g_assert_cmpint(f->sock, >=, 0);
     close(srv);
+}
+
+static void fixture_init(Fixture *f)
+{
+    fixture_init_opts(f, "");
 }
 
 static void fixture_done(Fixture *f)
@@ -491,17 +498,34 @@ static void sdma_channel(Fixture *f, int ch, int event, uint32_t pc,
 }
 
 /*
+ * Entry point the driver loads for a script, and machine options. Without
+ * RAM firmware the 5.4 driver loads PC 0 for uart_2_mcu; with a firmware
+ * the host does not know, the PCs are RAM addresses the SDMA model has
+ * never heard of. Script inference must cover both.
+ */
+typedef struct {
+    uint32_t pc;
+    const char *opts;
+} ScriptCase;
+
+static const ScriptCase rx_rom = { UART_2_MCU, "" };
+static const ScriptCase rx_pc0 = { 0, "" };
+static const ScriptCase tx_rom = { MCU_2_APP, "" };
+static const ScriptCase tx_ram = { 0x1b2c, "" };
+
+/*
  * imx_uart_start_rx_dma(): cyclic uart_2_mcu over 4 BDs, RXTL 9, burst 8.
  * 37 characters: two full BDs, the last 5 close BD2 through the ageing
  * timer, the script clears AGTIM and the request drops.
  */
-static void test_sdma_rx(void)
+static void test_sdma_rx(const void *data)
 {
+    const ScriptCase *sc = data;
     Fixture f;
     uint8_t buf[37];
     const int period = 16;
 
-    fixture_init(&f);
+    fixture_init_opts(&f, sc->opts);
     for (int i = 0; i < sizeof(buf); i++) {
         buf[i] = g_test_rand_int_range(0, 256);
     }
@@ -511,7 +535,7 @@ static void test_sdma_rx(void)
                  BD_DONE | BD_EXTD | BD_CONT | BD_INTR | (i == 3 ? BD_WRAP : 0),
                  1, BUF_RX + i * period, 0);
     }
-    sdma_channel(&f, 1, EV_UART1_RX, UART_2_MCU, UART + URXD, 8, BD_RX);
+    sdma_channel(&f, 1, EV_UART1_RX, sc->pc, UART + URXD, 8, BD_RX);
     uart_setup(&f, 9, 8);
     wr(&f, UCR1, UCR1_UARTEN | UCR1_RXDMAEN | UCR1_ATDMAEN);
     sdma_wr(&f, HSTART, 1 << 1);
@@ -546,12 +570,13 @@ static void test_sdma_rx(void)
  * imx_uart_dma_tx() with a wrapped circular buffer: two BDs, only the last
  * one interrupts. mcu_2_app writes bursts of 8 whenever TRDY (TXTL 8).
  */
-static void test_sdma_tx(void)
+static void test_sdma_tx(const void *data)
 {
+    const ScriptCase *sc = data;
     Fixture f;
     uint8_t buf[25], out[25];
 
-    fixture_init(&f);
+    fixture_init_opts(&f, sc->opts);
     for (int i = 0; i < sizeof(buf); i++) {
         buf[i] = g_test_rand_int_range(0, 256);
         qtest_writeb(f.qts, BUF_TX + i, buf[i]);
@@ -560,7 +585,7 @@ static void test_sdma_tx(void)
     write_bd(&f, BD_TX, 5, BD_DONE | BD_EXTD | BD_CONT, 1, BUF_TX, 0);
     write_bd(&f, BD_TX + 12, 20, BD_DONE | BD_EXTD | BD_INTR | BD_LAST, 1,
              BUF_TX + 5, 0);
-    sdma_channel(&f, 2, EV_UART1_TX, MCU_2_APP, UART + UTXD, 8, BD_TX);
+    sdma_channel(&f, 2, EV_UART1_TX, sc->pc, UART + UTXD, 8, BD_TX);
     uart_setup(&f, 9, 8);
     wr(&f, UCR1, UCR1_UARTEN | UCR1_TXDMAEN);
     sdma_wr(&f, HSTART, 1 << 2);
@@ -581,6 +606,31 @@ static void test_sdma_tx(void)
     fixture_done(&f);
 }
 
+/*
+ * sdma-infer-scripts=off: PC 0 is no script, the first request ends the
+ * transfer with BD_RROR and an interrupt (the driver reports DMA_ERROR)
+ */
+static void test_sdma_no_inference(void)
+{
+    Fixture f;
+
+    fixture_init_opts(&f, ",sdma-infer-scripts=off");
+    sdma_init(&f);
+    write_bd(&f, BD_RX, 16, BD_DONE | BD_EXTD | BD_CONT | BD_INTR | BD_WRAP,
+             1, BUF_RX, 0);
+    sdma_channel(&f, 1, EV_UART1_RX, 0, UART + URXD, 8, BD_RX);
+    uart_setup(&f, 9, 8);
+    wr(&f, UCR1, UCR1_UARTEN | UCR1_RXDMAEN | UCR1_ATDMAEN);
+    sdma_wr(&f, HSTART, 1 << 1);
+    sock_send(&f, "0123456789", 10);
+    g_assert_true(wait_bd_closed(&f, BD_RX));
+    g_assert_cmphex(bd_mode(&f, BD_RX) >> 16 & (BD_DONE | BD_RROR), ==,
+                    BD_RROR);
+    g_assert_cmphex(sdma_rd(&f, INTR) & (1 << 1), ==, 1 << 1);
+    g_assert_cmphex(sdma_rd(&f, STOP_STAT) & (1 << 1), ==, 0);
+    fixture_done(&f);
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -594,7 +644,12 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/uart/rx-dma-request-ageing",
                    test_rx_dma_request_ageing);
     qtest_add_func("/kick/uart/idle", test_idle);
-    qtest_add_func("/kick/uart/sdma-rx", test_sdma_rx);
-    qtest_add_func("/kick/uart/sdma-tx", test_sdma_tx);
+    qtest_add_data_func("/kick/uart/sdma-rx", &rx_rom, test_sdma_rx);
+    qtest_add_data_func("/kick/uart/sdma-tx", &tx_rom, test_sdma_tx);
+    qtest_add_data_func("/kick/uart/sdma-rx-infer-pc0", &rx_pc0,
+                        test_sdma_rx);
+    qtest_add_data_func("/kick/uart/sdma-tx-infer-ram", &tx_ram,
+                        test_sdma_tx);
+    qtest_add_func("/kick/uart/sdma-no-inference", test_sdma_no_inference);
     return g_test_run();
 }
