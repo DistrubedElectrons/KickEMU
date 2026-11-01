@@ -28,10 +28,14 @@ boot a KICK firmware image yet.
 ```sh
 git submodule update --init --recursive Emulator/third_party
 Emulator/qemu/build.sh            # QEMU with the KICK models, into Emulator/out/qemu
+Emulator/boot/build.sh            # kernel, DTBs, galcore, ATF, U-Boot, imx-boot (container)
+Emulator/testimage/build.sh       # test initramfs and ext4 rootfs with kick-selftest
+Emulator/boot/mkimage-emmc.sh     # eMMC image with the KICK partition layout
 ```
 
-The remaining build steps (boot chain, test image, host application) are added as each
-component lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
+See [boot/README.md](boot/README.md) (including the note on the NXP DDR firmware) and
+[testimage/README.md](testimage/README.md). The device tree checklist for the models is
+[docs/board-dt.md](docs/board-dt.md). The host application is added when it lands. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the plan.
 
 ## Configuration
 

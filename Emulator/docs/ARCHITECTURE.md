@@ -107,6 +107,12 @@ the pinned commit with the board patches and `Linux-defconfig`, U-Boot (`uboot-i
 its patches and SPL, `imx-atf` BL31, NXP DDR firmware and `imx-mkimage`, producing
 `imx-boot`, `Image` and `imx8mm-var-som-symphony.dtb` in `Emulator/out/boot/`.
 Repository URLs and commits come from the defconfig. They are not duplicated.
+Outputs go to the main checkout's `Emulator/out/boot` (also when built from a worktree);
+the full list, the eMMC image (`Emulator/boot/mkimage-emmc.sh` ->
+`Emulator/out/images/emmc.img`) and the DDR firmware rules are in `Emulator/boot/README.md`.
+Without the NXP DDR training firmware, `imx-boot` carries zero-filled training blobs and
+is valid for the emulator only. The enabled DT nodes the models must provide are listed
+in `docs/board-dt.md`.
 
 ### 3. Test image (`Emulator/testimage`)
 
