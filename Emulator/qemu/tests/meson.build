@@ -6,14 +6,18 @@
 
 kick_qtests = [
   'kick-ad5675r-test',
+  'kick-board-test',
+  'kick-clock-test',
   'kick-dsim-test',
   'kick-gpu-test',
   'kick-gt911-test',
   'kick-lcdif-test',
+  'kick-ocotp-test',
   'kick-pca9534-test',
   'kick-pcf85263-test',
   'kick-sai-test',
   'kick-sdma-test',
+  'kick-system-test',
 ]
 
 qtests_aarch64 += kick_qtests
