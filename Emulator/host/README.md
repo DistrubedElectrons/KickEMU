@@ -43,6 +43,7 @@ KickEmu=Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app/Contents/MacOS/K
 $KickEmu                                  # kick machine, settings from Emulator/config/kickemu.json
 $KickEmu --profile demo --presentation    # bare-metal showcase (build Emulator/demo/baremetal first)
 $KickEmu --profile selftest               # vendor kernel + test initramfs, runs kick-selftest
+$KickEmu --profile kick-app               # vendor kernel + Debian rootfs on the eMMC, runs KT_Kick (Emulator/rootfs)
 $KickEmu --profile virt-test              # stock QEMU virt + virtio GPU/multitouch (no kick machine needed)
 $KickEmu --set qemu.boot=uboot            # U-Boot proper (boot.uboot_image at boot.uboot_load_addr)
 $KickEmu --set qemu.accel=tcg --set qemu.boot=rom

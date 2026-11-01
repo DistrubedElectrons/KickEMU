@@ -1,0 +1,6 @@
+# ENET1 (FEC): DHCP, as the KICK app's "udhcpc -i eth0".
+[Match]
+Name=eth0
+
+[Network]
+DHCP=ipv4

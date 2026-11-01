@@ -81,6 +81,73 @@
     ],
     "rootfs_ext4_size": "64M"
   },
+  "rootfs": {
+    "_comment": "Debian 12 root file system running KT_Kick on X (Emulator/rootfs/build.sh).",
+    "out_dir": "Emulator/out/rootfs",
+    "base_image": "debian:bookworm",
+    "platform": "linux/arm64",
+    "apt_mirror": "",
+    "stage_container": "kickemu-rootfs-stage",
+    "packages": [
+      "systemd", "systemd-sysv", "systemd-resolved", "udev", "kmod", "procps",
+      "iproute2", "iputils-ping", "openssh-server", "e2fsprogs",
+      "alsa-utils", "i2c-tools", "evtest",
+      "xserver-xorg-core", "xserver-xorg-video-fbdev", "xserver-xorg-input-evdev", "xinit",
+      "libx11-6", "libxext6", "libxrandr2", "libxinerama1", "libxcursor1", "libxrender1",
+      "libxi6", "libxcomposite1",
+      "libasound2", "libfreetype6", "libpng16-16", "libbrotli1", "zlib1g", "libstdc++6",
+      "fonts-dejavu-core", "fontconfig-config"
+    ],
+    "image_size": "762M",
+    "label": "kick-rootfs",
+    "hostname": "kick",
+    "root_password": "kick",
+    "ssh_authorized_keys": "",
+    "console_tty": "ttymxc3",
+    "console_autologin": true,
+    "console_loglevel": 3,
+    "board_overlay_files": [
+      "etc/asound.conf",
+      "usr/bin/kt_kick.sh",
+      "usr/bin/kick-storage-mkfs",
+      "etc/systemd/system/kick-storage-mkfs.service",
+      "etc/systemd/system/media.mount",
+      "etc/systemd/system/media-kickstorage.mount",
+      "etc/systemd/system/local-fs.target.wants/media-kickstorage.mount",
+      "etc/udev/rules.d/10-imx.rules"
+    ],
+    "emmc_image": "Emulator/out/images/emmc-kick-app.img",
+    "x": {
+      "display": ":0",
+      "vt": "vt7",
+      "fbdev": "/dev/fb0",
+      "fb_kernel_name": "fb0",
+      "touch_product": "Goodix Capacitive TouchScreen",
+      "server_args": ["-nocursor", "-nolisten", "tcp", "-s", "0", "-dpms"]
+    },
+    "app": {
+      "source": "artifact",
+      "repo": "KickEm-Tools/0700-AAM",
+      "ref": "main",
+      "workflow": "build",
+      "artifact": "KT_Kick-linux-arm64",
+      "run_id": "",
+      "package_file": "",
+      "build_image": "debian:bookworm",
+      "build_volume": "kickemu-ktkick-build",
+      "build_jobs": 0,
+      "build_mem_per_job_mb": 2500,
+      "build_packages": [
+        "ca-certificates", "git", "python3", "zstd",
+        "gcc", "g++", "make", "cmake", "ninja-build", "pkg-config", "file",
+        "libasound2-dev", "libjack-jackd2-dev", "libcurl4-openssl-dev", "libfreetype6-dev",
+        "libx11-dev", "libxcomposite-dev", "libxcursor-dev", "libxext-dev", "libxinerama-dev",
+        "libxi-dev", "libxrandr-dev", "libxrender-dev", "libglu1-mesa-dev", "mesa-common-dev",
+        "libserial-dev"
+      ],
+      "environment": {}
+    }
+  },
   "storage": {
     "emmc_image": "Emulator/out/images/emmc.img",
     "emmc_size": "14G",
@@ -182,6 +249,16 @@
         "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 kick.selftest=1"
       },
       "storage": { "use_test_initrd": true }
+    },
+    "kick-app": {
+      "_comment": "Vendor kernel with the Debian 12 rootfs from Emulator/rootfs/build.sh on the eMMC (partition 1, root=/dev/mmcblk2p1): X on fb0 and KT_Kick, MCU on ttymxc0.",
+      "boot": {
+        "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw"
+      },
+      "storage": {
+        "emmc_image": "Emulator/out/images/emmc-kick-app.img",
+        "use_test_initrd": false
+      }
     },
     "virt-test": {
       "_comment": "Stock QEMU virt machine with virtio GPU and multitouch, for testing the display, touch and QMP path before the kick machine is ready.",

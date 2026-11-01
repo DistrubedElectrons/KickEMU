@@ -1,0 +1,35 @@
+diff --git a/hw/sd/sd.c b/hw/sd/sd.c
+--- a/hw/sd/sd.c
++++ b/hw/sd/sd.c
+@@ -1350,7 +1350,31 @@
+     sd->erase_start = INVALID_ADDRESS;
+     sd->erase_end = INVALID_ADDRESS;
+     sd->csd[14] |= 0x40;
++
++    /*
++     * eMMC: EXT_CSD ERASED_MEM_CONT is 0, so erased memory reads as 0x00.
++     * Zero the whole range in one request that may unmap: Linux discards
++     * the whole device before mkfs, and writing it block by block from
++     * the vCPU thread stalled the guest for minutes and filled sparse
++     * images with gigabytes of data. Byte-addressed cards keep the per
++     * block loop when a write protect group in the range is set.
++     */
++    if (sd_is_emmc(sd) &&
++        (!sdsc || find_next_bit(sd->wp_group_bmap,
++                                sd_addr_to_wpnum(erase_end) + 1,
++                                sd_addr_to_wpnum(erase_start)) >
++                  sd_addr_to_wpnum(erase_end))) {
++        uint64_t len = erase_end + erase_len - erase_start;
+ 
++        len = MIN(len, sd->size - erase_start);
++        if (!sd->blk ||
++            blk_pwrite_zeroes(sd->blk, erase_start + sd_part_offset(sd), len,
++                              BDRV_REQ_MAY_UNMAP) < 0) {
++            error_report("sd_erase: write error on host side");
++        }
++        return;
++    }
++
+     memset(sd->data, 0xff, erase_len);
+     for (erase_addr = erase_start; erase_addr <= erase_end;
+          erase_addr += erase_len) {
