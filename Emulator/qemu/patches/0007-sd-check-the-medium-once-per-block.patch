@@ -1,0 +1,27 @@
+diff --git a/hw/sd/sd.c b/hw/sd/sd.c
+--- a/hw/sd/sd.c
++++ b/hw/sd/sd.c
+@@ -2667,7 +2667,12 @@
+     unsigned int partition_access;
+     int i;
+ 
+-    if (!sd->blk || !blk_is_inserted(sd->blk)) {
++    /*
++     * blk_is_inserted() runs a coroutine and polls when called from outside
++     * one; once per byte it cost four times the write itself and held the
++     * BQL for hundreds of ms per large transfer. Check at block boundaries.
++     */
++    if (!sd->blk || (sd->data_offset == 0 && !blk_is_inserted(sd->blk))) {
+         return;
+     }
+ 
+@@ -2807,7 +2812,8 @@
+     uint8_t ret;
+     uint32_t io_len;
+ 
+-    if (!sd->blk || !blk_is_inserted(sd->blk)) {
++    /* See sd_write_byte(): the medium is checked at block boundaries */
++    if (!sd->blk || (sd->data_offset == 0 && !blk_is_inserted(sd->blk))) {
+         return dummy_byte;
+     }
+ 
