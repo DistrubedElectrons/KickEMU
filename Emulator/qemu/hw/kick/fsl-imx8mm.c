@@ -488,10 +488,14 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
 
     /*
      * UART1..4 on serial_hd(0..3). The UART raises its interrupt through
-     * the named "irq" output (the sysbus IRQ feeds its DMA request logic).
+     * the named "irq" output; its line timing follows the UARTn clock root.
      */
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         qdev_prop_set_chr(DEVICE(&s->uart[i]), "chardev", serial_hd(i));
+        object_property_set_link(OBJECT(&s->uart[i]), "ccm", OBJECT(&s->ccm),
+                                 &error_abort);
+        qdev_prop_set_uint32(DEVICE(&s->uart[i]), "ccm-root",
+                             IMX8MM_CCM_ROOT_UART1 + i * 0x80);
         if (!fsl_imx8mm_sysbus(s, &s->uart[i],
                                fsl_imx8mm_memmap[uart_mmap[i]].addr,
                                -1, errp)) {
