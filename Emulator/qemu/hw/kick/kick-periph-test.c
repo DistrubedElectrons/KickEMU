@@ -1,10 +1,11 @@
 /*
  * KICK peripheral test machine (qtest only)
  *
- * A CPU-less machine that places the KICK I2C controllers, SAI2 and SDMA2
+ * A machine that places the KICK I2C controllers, SAI2 and SDMA2
  * at their i.MX 8M Mini addresses so the device models can be exercised by
  * qtests before the full fsl-imx8mm SoC is available. It is not meant to
- * boot anything. The wiring mirrors what the kick board does:
+ * boot anything: its single Cortex-A53 only provides the address space
+ * qtest accesses go through and starts powered off. The wiring mirrors what the kick board does:
  *
  *   I2C3  0x30a40000  bus "i2c-bus.0"  (GT911 0x14, PCF85263 0x68)
  *   I2C4  0x30a50000  bus "i2c-bus.1"  (CV/Gate DAC 0x0c)
@@ -23,11 +24,13 @@
 #include "qemu/units.h"
 #include "hw/arm/machines-qom.h"
 #include "hw/core/boards.h"
+#include "hw/core/cpu.h"
 #include "hw/core/qdev-properties.h"
 #include "hw/core/sysbus.h"
 #include "hw/i2c/imx_i2c.h"
 #include "qapi/error.h"
 #include "system/address-spaces.h"
+#include "target/arm/cpu-qom.h"
 #include "imx8mm_sai.h"
 #include "imx_sdma.h"
 
@@ -50,7 +53,13 @@ static void kick_periph_test_init(MachineState *machine)
     static const hwaddr i2c_base[] = { KPT_I2C3_BASE, KPT_I2C4_BASE };
     static const char *const i2c_name[] = { "i2c3", "i2c4" };
     DeviceState *sai, *sdma;
+    Object *cpu;
     unsigned i;
+
+    cpu = object_new(machine->cpu_type);
+    object_property_set_bool(cpu, "start-powered-off", true, &error_fatal);
+    qdev_realize(DEVICE(cpu), NULL, &error_fatal);
+    object_unref(cpu);
 
     if (machine->ram) {
         memory_region_add_subregion(get_system_memory(), KPT_RAM_BASE,
@@ -92,9 +101,10 @@ static void kick_periph_test_init(MachineState *machine)
 
 static void kick_periph_test_machine_init(MachineClass *mc)
 {
-    mc->desc = "KICK peripheral test machine (qtest only, no CPU)";
+    mc->desc = "KICK peripheral test machine (qtest only)";
     mc->init = kick_periph_test_init;
     mc->max_cpus = 1;
+    mc->default_cpu_type = ARM_CPU_TYPE_NAME("cortex-a53");
     mc->default_ram_size = 64 * MiB;
     mc->default_ram_id = "kick-periph-test.ram";
     mc->no_serial = 1;
