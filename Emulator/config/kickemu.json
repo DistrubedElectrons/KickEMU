@@ -15,6 +15,8 @@
     "cv_property": "cv-chardev",
     "emmc_property": "emmc",
     "sd_property": "sd",
+    "boot_property": "boot-mode",
+    "sdma_firmware_property": "sdma-firmware",
     "machine_properties": {},
     "serial_order": ["mcu", "uart2", "midi", "console"],
     "display": "vnc",
@@ -33,6 +35,7 @@
     "uboot_image": "Emulator/out/boot/u-boot.bin",
     "uboot_load_addr": "0x40200000",
     "firmware": "",
+    "sdma_firmware": "",
     "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw",
     "builder": {
       "image": "kickemu-boot-builder",
@@ -164,6 +167,22 @@
     }
   },
   "profiles": {
+    "demo": {
+      "_comment": "Bare-metal showcase firmware (Emulator/demo/baremetal) on the kick machine: screen animation and the PktMgr light show on the front panel.",
+      "boot": {
+        "kernel_image": "Emulator/out/demo/kick-demo.elf",
+        "dtb": "",
+        "cmdline": ""
+      },
+      "storage": { "use_test_initrd": false }
+    },
+    "selftest": {
+      "_comment": "Vendor kernel with the Alpine test initramfs; runs kick-selftest on the console after boot.",
+      "boot": {
+        "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 kick.selftest=1"
+      },
+      "storage": { "use_test_initrd": true }
+    },
     "virt-test": {
       "_comment": "Stock QEMU virt machine with virtio GPU and multitouch, for testing the display, touch and QMP path before the kick machine is ready.",
       "qemu": {
