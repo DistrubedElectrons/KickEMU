@@ -29,6 +29,7 @@
 
 #include "imx8mm_anatop.h"
 #include "imx8mm_ccm.h"
+#include "imx8mm_cqhci.h"
 #include "imx8mm_gpc.h"
 #include "imx8mm_iomuxc.h"
 #include "imx8mm_ocotp.h"
@@ -301,6 +302,8 @@ struct FslImx8mmState {
     IMXI2CState         i2c[FSL_IMX8MM_NUM_I2CS];
     IMXSPIState         spi[FSL_IMX8MM_NUM_ECSPIS];
     SDHCIState          usdhc[FSL_IMX8MM_NUM_USDHCS];
+    IMX8MMCQHCIState    cqhci[FSL_IMX8MM_NUM_USDHCS];
+    OrIRQState          usdhc_irq[FSL_IMX8MM_NUM_USDHCS];
     IMX2WdtState        wdt[FSL_IMX8MM_NUM_WDTS];
     IMXFECState         enet;
 

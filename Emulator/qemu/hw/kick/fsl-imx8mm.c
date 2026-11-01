@@ -197,19 +197,6 @@ DeviceState *fsl_imx8mm_get_optional(FslImx8mmState *s, const char *name)
     return s->optional ? g_hash_table_lookup(s->optional, name) : NULL;
 }
 
-static bool fsl_imx8mm_is_optional_mapped(FslImx8mmState *s, int region)
-{
-    for (int i = 0; i < ARRAY_SIZE(fsl_imx8mm_optional); i++) {
-        const FslImx8mmOptional *o = &fsl_imx8mm_optional[i];
-
-        if ((o->mmio[0] == region || o->mmio[1] == region) &&
-            fsl_imx8mm_get_optional(s, o->name)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static void fsl_imx8mm_init(Object *obj)
 {
     FslImx8mmState *s = FSL_IMX8MM(obj);
@@ -252,7 +239,12 @@ static void fsl_imx8mm_init(Object *obj)
     }
     for (i = 0; i < FSL_IMX8MM_NUM_USDHCS; i++) {
         g_autofree char *name = g_strdup_printf("usdhc%d", i + 1);
+        g_autofree char *cq = g_strdup_printf("usdhc%d-cqhci", i + 1);
+        g_autofree char *irq = g_strdup_printf("usdhc%d-irq", i + 1);
+
         object_initialize_child(obj, name, &s->usdhc[i], TYPE_IMX_USDHC);
+        object_initialize_child(obj, cq, &s->cqhci[i], TYPE_IMX8MM_CQHCI);
+        object_initialize_child(obj, irq, &s->usdhc_irq[i], TYPE_OR_IRQ);
     }
     for (i = 0; i < FSL_IMX8MM_NUM_ECSPIS; i++) {
         g_autofree char *name = g_strdup_printf("ecspi%d", i + 1);
@@ -541,11 +533,28 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
                            fsl_imx8mm_irq(s, FSL_IMX8MM_GPIO1_HIGH_IRQ + 2 * i));
     }
 
+    /*
+     * uSDHC1..3. The SDHCI core registers end at 0x100; the command queue
+     * engine follows at +0x100 and shares the controller interrupt.
+     */
     for (i = 0; i < FSL_IMX8MM_NUM_USDHCS; i++) {
-        if (!fsl_imx8mm_sysbus(s, &s->usdhc[i], MMAP(USDHC1) + i * 0x10000,
-                               usdhc_irq[i], errp)) {
+        hwaddr base = MMAP(USDHC1) + i * 0x10000;
+        DeviceState *orirq = DEVICE(&s->usdhc_irq[i]);
+
+        qdev_prop_set_uint16(orirq, "num-lines", 2);
+        if (!qdev_realize(orirq, NULL, errp)) {
             return false;
         }
+        qdev_connect_gpio_out(orirq, 0, fsl_imx8mm_irq(s, usdhc_irq[i]));
+        if (!fsl_imx8mm_sysbus(s, &s->usdhc[i], base, -1, errp) ||
+            !fsl_imx8mm_sysbus(s, &s->cqhci[i], base + IMX8MM_CQHCI_OFFSET,
+                               -1, errp)) {
+            return false;
+        }
+        sysbus_connect_irq(SYS_BUS_DEVICE(&s->usdhc[i]), 0,
+                           qdev_get_gpio_in(orirq, 0));
+        sysbus_connect_irq(SYS_BUS_DEVICE(&s->cqhci[i]), 0,
+                           qdev_get_gpio_in(orirq, 1));
     }
 
     for (i = 0; i < FSL_IMX8MM_NUM_ECSPIS; i++) {
@@ -697,7 +706,12 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
         return;
     }
 
-    /* Everything else in the memory map is logged as unimplemented */
+    /*
+     * Every peripheral window gets an unimplemented-device at the lowest
+     * priority. Where a model exists it sits on top; accesses to blocks
+     * without a model, or to the part of a 64 KiB slot a model does not
+     * decode, are logged with "-d unimp" instead of aborting.
+     */
     for (int i = 0; i < FSL_IMX8MM_NUM_MEMORY_REGIONS; i++) {
         switch (i) {
         case FSL_IMX8MM_BOOT_ROM:
@@ -706,25 +720,12 @@ static void fsl_imx8mm_realize(DeviceState *dev, Error **errp)
         case FSL_IMX8MM_TCM_ITCM:
         case FSL_IMX8MM_TCM_DTCM:
         case FSL_IMX8MM_OCRAM:
-        case FSL_IMX8MM_GPIO1 ... FSL_IMX8MM_GPIO5:
-        case FSL_IMX8MM_TMU:
-        case FSL_IMX8MM_WDOG1 ... FSL_IMX8MM_WDOG3:
-        case FSL_IMX8MM_GPT1 ... FSL_IMX8MM_GPT3:
-        case FSL_IMX8MM_IOMUXC ... FSL_IMX8MM_GPC:
-        case FSL_IMX8MM_SYSCNT_RD ... FSL_IMX8MM_GPT4:
-        case FSL_IMX8MM_ECSPI1 ... FSL_IMX8MM_UART2:
-        case FSL_IMX8MM_I2C1 ... FSL_IMX8MM_UART4:
-        case FSL_IMX8MM_USDHC1 ... FSL_IMX8MM_USDHC3:
-        case FSL_IMX8MM_ENET1:
         case FSL_IMX8MM_GIC_DIST:
         case FSL_IMX8MM_GIC_REDIST:
         case FSL_IMX8MM_RAM:
-            /* modelled above, or RAM provided by the board */
+            /* memories and the GIC */
             break;
         default:
-            if (fsl_imx8mm_is_optional_mapped(s, i)) {
-                break;
-            }
             create_unimplemented_device(fsl_imx8mm_memmap[i].name,
                                         fsl_imx8mm_memmap[i].addr,
                                         fsl_imx8mm_memmap[i].size);
