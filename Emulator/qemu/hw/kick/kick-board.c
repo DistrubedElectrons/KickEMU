@@ -32,6 +32,8 @@
 #include "hw/core/boards.h"
 #include "hw/core/loader.h"
 #include "hw/core/qdev-properties.h"
+#include "hw/gpio/pca9554.h"
+#include "sn65dsi83.h"
 #include "hw/i2c/i2c.h"
 #include "hw/sd/sd.h"
 #include "net/net.h"
@@ -78,6 +80,8 @@ struct KickMachineState {
     uint64_t uboot_addr;
     uint64_t emmc_boot_part_size;
     uint32_t pwrkey_press_ms;
+    uint32_t panel_width;
+    uint32_t panel_height;
     char *rom_boot_device;
 };
 
@@ -158,6 +162,32 @@ static void kick_board_setup_sai2(KickMachineState *s)
     if (sai2 && audiodev && object_property_find(OBJECT(sai2), "audiodev")) {
         qdev_prop_set_string(sai2, "audiodev", audiodev);
     }
+}
+
+/*
+ * NXP PCA9534 GPIO expander on I2C2 at 0x20 (gpio-keys Back/Home/Menu on
+ * pins 1..3, hogs on 4..7). QEMU's PCA9554 has the same register set; it
+ * has no INT output, so key changes are seen when Linux reads the port.
+ */
+static void kick_board_wire_expander(KickMachineState *s)
+{
+    i2c_slave_create_simple(kick_i2c_bus(s, 2), TYPE_PCA9554,
+                            KICK_PCA9534_I2C_ADDR);
+}
+
+/*
+ * TI SN65DSI84 DSI-to-LVDS bridge on I2C1 at 0x2c, the DSIM's DSI
+ * peripheral; EN comes from GPIO2_IO11.
+ */
+static void kick_board_wire_bridge(KickMachineState *s)
+{
+    I2CSlave *br = i2c_slave_new(TYPE_SN65DSI83, KICK_SN65DSI84_I2C_ADDR);
+
+    object_property_set_link(OBJECT(br), "dsi-host", OBJECT(&s->soc.dsim),
+                             &error_abort);
+    i2c_slave_realize_and_unref(br, kick_i2c_bus(s, 1), &error_fatal);
+    qdev_connect_gpio_out(kick_gpio(s, 2), 11,
+                          qdev_get_gpio_in_named(DEVICE(br), "enable", 0));
 }
 
 /* BD71847 PMIC on I2C1, INTB (active low) on GPIO2_IO08 */
@@ -312,6 +342,10 @@ static void kick_init(MachineState *machine)
     object_property_set_bool(OBJECT(&s->soc.sysctr), "start-enabled",
                              mode != KICK_BOOT_ROM, &error_abort);
     kick_board_setup_sai2(s);
+    /* Scan-out size the host sees until the guest programs a mode */
+    qdev_prop_set_uint32(DEVICE(&s->soc.lcdif), "panel-width", s->panel_width);
+    qdev_prop_set_uint32(DEVICE(&s->soc.lcdif), "panel-height",
+                         s->panel_height);
     sysbus_realize(SYS_BUS_DEVICE(&s->soc), &error_fatal);
 
     memory_region_add_subregion(get_system_memory(), FSL_IMX8MM_RAM_START,
@@ -322,6 +356,8 @@ static void kick_init(MachineState *machine)
 
     kick_board_wire_phy(s);
     kick_board_wire_pmic(s);
+    kick_board_wire_expander(s);
+    kick_board_wire_bridge(s);
     kick_board_wire_gt911(s);
     kick_board_wire_pcf85263(s);
     kick_board_wire_cv(s);
@@ -435,6 +471,8 @@ KICK_INT_PROP(soc_uid, uint64)
 KICK_INT_PROP(uboot_addr, uint64)
 KICK_INT_PROP(emmc_boot_part_size, uint64)
 KICK_INT_PROP(pwrkey_press_ms, uint32)
+KICK_INT_PROP(panel_width, uint32)
+KICK_INT_PROP(panel_height, uint32)
 
 static void kick_instance_init(Object *obj)
 {
@@ -446,6 +484,8 @@ static void kick_instance_init(Object *obj)
     s->pwrkey_press_ms = KICK_PWRKEY_DEFAULT_PRESS_MS;
     s->emmc_boot_part_size = 0;
     s->soc_uid = 0;
+    s->panel_width = KICK_PANEL_DEFAULT_WIDTH;
+    s->panel_height = KICK_PANEL_DEFAULT_HEIGHT;
 }
 
 static void kick_finalize(Object *obj)
@@ -508,6 +548,16 @@ static void kick_class_init(ObjectClass *oc, const void *data)
                               kick_set_pwrkey_press_ms, NULL, NULL);
     object_class_property_set_description(oc, "power-key-press-ms",
         "How long system_powerdown holds the ON/OFF button");
+    object_class_property_add(oc, "panel-width", "uint32",
+                              kick_get_panel_width, kick_set_panel_width,
+                              NULL, NULL);
+    object_class_property_set_description(oc, "panel-width",
+        "LCDIF scan-out width before the guest sets a mode");
+    object_class_property_add(oc, "panel-height", "uint32",
+                              kick_get_panel_height, kick_set_panel_height,
+                              NULL, NULL);
+    object_class_property_set_description(oc, "panel-height",
+        "LCDIF scan-out height before the guest sets a mode");
     /* "audiodev" (the generic machine property) feeds SAI2 */
     machine_add_audiodev_property(mc);
     object_class_property_add_str(oc, "rom-boot-device",

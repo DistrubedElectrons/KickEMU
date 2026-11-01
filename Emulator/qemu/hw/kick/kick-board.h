@@ -13,6 +13,8 @@
 /* SOM devices */
 #define KICK_PMIC_I2C_ADDR          0x4b    /* BD71847 on I2C1 */
 #define KICK_ENET_PHY_ADDR          4       /* AR8033 on the ENET1 MDIO bus */
+#define KICK_PCA9534_I2C_ADDR       0x20    /* GPIO expander on I2C2 */
+#define KICK_SN65DSI84_I2C_ADDR     0x2c    /* DSI-to-LVDS bridge on I2C1 */
 
 /*
  * Carrier devices written as separate models. The board instantiates
@@ -28,5 +30,8 @@
 /* Defaults of machine properties */
 #define KICK_UBOOT_DEFAULT_ADDR     0x40200000  /* CONFIG_SYS_TEXT_BASE */
 #define KICK_PWRKEY_DEFAULT_PRESS_MS 200
+/* LVDS mode in the KICK DT (sn65dsi84 display-timings) */
+#define KICK_PANEL_DEFAULT_WIDTH    1024
+#define KICK_PANEL_DEFAULT_HEIGHT   600
 
 #endif /* KICK_BOARD_H */
