@@ -12,6 +12,8 @@
 #   atf       imx-atf BL31 for imx8mm
 #   uboot     uboot-imx + board patches + defconfig -> SPL, u-boot-nodtb.bin, DTBs
 #   imxboot   imx-mkimage + DDR training firmware -> imx-boot
+#   dtdoc     (not in all) decompiled board DTS and the node table used by
+#             Emulator/docs/board-dt.md
 #
 # Options:
 #   --config <file>     configuration (default: Emulator/config/kickemu.json)
@@ -48,7 +50,7 @@ while [[ $# -gt 0 ]]; do
         --shell)     SHELL_MODE=1; shift ;;
         --drop-work) DROP_WORK=1; shift ;;
         -h|--help)   usage; exit 0 ;;
-        kernel|gpu|atf|uboot|imxboot|all) STAGES+=("$1"); shift ;;
+        kernel|gpu|atf|uboot|imxboot|dtdoc|all) STAGES+=("$1"); shift ;;
         *) echo "unknown argument: $1" >&2; usage >&2; exit 2 ;;
     esac
 done
