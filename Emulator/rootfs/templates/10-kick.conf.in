@@ -8,6 +8,11 @@ Section "ServerFlags"
     Option "OffTime"     "0"
 EndSection
 
+# JUCE renders in software; GLX would only load Mesa's llvmpipe (about 8 s at start).
+Section "Extensions"
+    Option "GLX" "Disable"
+EndSection
+
 Section "Device"
     Identifier "kick-fb"
     Driver     "fbdev"
