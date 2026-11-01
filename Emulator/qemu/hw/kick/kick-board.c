@@ -85,6 +85,7 @@ struct KickMachineState {
     uint32_t panel_width;
     uint32_t panel_height;
     bool gt911_reset_wired;
+    bool sdma_infer_scripts;
     char *rom_boot_device;
 };
 
@@ -367,6 +368,8 @@ static void kick_init(MachineState *machine)
         object_property_set_str(soc, "sdma-firmware", s->sdma_firmware,
                                 &error_abort);
     }
+    object_property_set_bool(soc, "sdma-infer-scripts", s->sdma_infer_scripts,
+                             &error_abort);
     object_property_set_uint(OBJECT(&s->soc.ocotp), "unique-id", s->soc_uid,
                              &error_abort);
     /* Without ATF nothing would enable the system counter */
@@ -534,9 +537,21 @@ static void kick_set_gt911_reset_wired(Object *obj, bool v, Error **errp)
     KICK_MACHINE(obj)->gt911_reset_wired = v;
 }
 
+static bool kick_get_sdma_infer_scripts(Object *obj, Error **errp)
+{
+    return KICK_MACHINE(obj)->sdma_infer_scripts;
+}
+
+static void kick_set_sdma_infer_scripts(Object *obj, bool v, Error **errp)
+{
+    KICK_MACHINE(obj)->sdma_infer_scripts = v;
+}
+
 static void kick_instance_init(Object *obj)
 {
     KickMachineState *s = KICK_MACHINE(obj);
+
+    s->sdma_infer_scripts = true;
 
     s->boot = g_strdup("kernel");
     s->rom_boot_device = g_strdup("emmc");
@@ -624,6 +639,12 @@ static void kick_class_init(ObjectClass *oc, const void *data)
                                   kick_set_sdma_firmware);
     object_class_property_set_description(oc, "sdma-firmware",
         "sdma-imx7d.bin of the guest rootfs: RAM script entry points");
+    object_class_property_add_bool(oc, "sdma-infer-scripts",
+                                   kick_get_sdma_infer_scripts,
+                                   kick_set_sdma_infer_scripts);
+    object_class_property_set_description(oc, "sdma-infer-scripts",
+        "Derive SDMA scripts at unknown entry points from the channel's "
+        "DMA events and FIFO address (default on)");
     object_class_property_add_bool(oc, "gt911-reset-wired",
                                    kick_get_gt911_reset_wired,
                                    kick_set_gt911_reset_wired);

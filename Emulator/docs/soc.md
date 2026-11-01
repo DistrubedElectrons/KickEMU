@@ -41,6 +41,8 @@ qemu-system-aarch64 -M kick,boot-mode=rom,emmc=emmc -accel tcg -cpu cortex-a53 .
 | `sdma-firmware` | none | `sdma-imx7d.bin` of the guest rootfs; its header gives the RAM script entry points (see below) |
 | `power-key-press-ms` | 200 | how long `system_powerdown` holds the SNVS ON/OFF button |
 | `gt911-reset-wired` | off | connect GPIO5_IO03 to the GT911 RSTB (see "Board") |
+| `sdma-firmware` | none | the guest's `sdma-imx7d.bin`; its header gives the exact RAM script entry points |
+| `sdma-infer-scripts` | on | derive the script at an unknown SDMA entry point (no firmware, or a firmware the host does not have) from the channel's DMA events and FIFO address |
 
 Exception levels: `boot-mode=kernel/uboot` start the payload at EL2 under TCG (as ATF does on
 the KICK) and at EL1 under HVF; `boot-mode=rom` starts SPL at EL3.
@@ -80,7 +82,7 @@ the KICK) and at EL1 under HVF; `boot-mode=rom` starts SPL at EL3.
 | 0x306a_0000 | 3 x 64 KiB | System counter read / compare / control frames | `imx8mm.sysctr` |
 | 0x306e_0000 / 0x306f_0000 / 0x3070_0000 | | GPT6 / GPT5 / GPT4 | `imx7.gpt` |
 | 0x3082_0000 | 3 x 64 KiB | ECSPI1..ECSPI3 | `imx.spi` (upstream) |
-| 0x3086_0000 / 0x3089_0000 / 0x3088_0000 / 0x30a6_0000 | | UART1 / UART2 / UART3 / UART4 | `imx8mm-uart` (upstream imx_serial + SDMA requests) |
+| 0x3086_0000 / 0x3089_0000 / 0x3088_0000 / 0x30a6_0000 | | UART1 / UART2 / UART3 / UART4 | `imx8mm-uart` |
 | 0x3090_0000 | 256 KiB | CAAM | unimplemented |
 | 0x30a2_0000 | 4 x 64 KiB | I2C1..I2C4 | `imx8mm-i2c` (upstream imx_i2c + NACK completion) |
 | 0x30aa_0000 / 0x30ab_0000 | | MU A / B | unimplemented |
@@ -155,13 +157,15 @@ events 0/1, 2/3, 4/5, 8/9, 10/11.
 | **DDR controller + PHY** `imx8mm.ddrc` | uMCTL2 register file with STAT/operating mode, DFIMISC/DFISTAT, SWCTL/SWSTAT, MRSTAT, DBGCAM, scrubber; PHY APB space as storage (firmware images read back), PMU mailbox, training start reports "pass" | via `boot-mode=rom` |
 | **BD71847 PMIC** `bd71847` | full 8-bit register file, auto-increment, REGLOCK (VREG/PWRSEQ), SWRESET, IRQ/MIRQ with active-low INTB on GPIO2_IO08, read-only status | `kick-board-test` |
 | **AR8033 PHY** `ar8033-phy` | MDIO clause 22 at address 4 (ID 0x004d/0xd074), link from the NIC, 1000/full resolution, specific status, interrupt status, MMD and debug port | ID, link, debug port, reset |
+| **UART** `imx8mm-uart` | 32 entry TX/RX FIFOs with line timing from the UARTn clock root, RFDIV, UBIR/UBMR and the frame format; TRDY/RRDY at TXTL/RXTL, TXFE/TXDC/RDR, UTS flags, OVRRUN on entry 32; ageing timer (AGTIM after 8 idle frames below RXTL) and idle detect (UCR1.ICD); all USR1/USR2 interrupt sources with their UCR1..4 enables; SDMA requests RXDMAEN&RRDY, ATDMAEN&AGTIM, IDDMAEN&IDLE, TXDMAEN&TRDY; SRST resets only what the RM lists; UTS.LOOP; non-blocking backend with flow control (nothing is lost). Characters are scheduled by due time so a late host timer catches up (`catch-up-us`) | `kick-uart-test` |
+| **SDMA** `imx8mm-sdma` | channel 0 boot commands, contexts, ROM script semantics (ap_2_ap, app/shp_2_mcu, mcu_2_app/shp, uart(sh)_2_mcu with ageing/idle close), RAM entry points from the firmware header, script inference for unknown entry points | `kick-sdma-test`, `kick-uart-test` |
 | **BootROM** (`kick-bootrom.c`) | IVT at 33 KiB, boot data, image placed in TCM/OCRAM (as a ROM blob, reloaded on reset), ROM boot info at 0x9e8 for SPL, CPU 0 entry in EL3 | `boot-mode=rom` |
 
 ### Upstream models used, and the 8MM differences fixed in wrappers
 
 | Block | Upstream model | 8MM difference handled |
 |---|---|---|
-| UART1..4 | `imx.serial` | `imx8mm-uart`: RX/TX SDMA request outputs (RXDMAEN/ATDMAEN/TXDMAEN with RRDY/AGTIM/TRDY) |
+| UART1..4 | not `imx.serial` | replaced by `imx8mm-uart` (the upstream one has no TX FIFO, no line timing and blocks on the backend, which breaks SDMA mode) |
 | I2C1..4 | `imx.i2c` | `imx8mm-i2c`: I2SR.IIF is set at the end of a NACKed byte, as on hardware (upstream leaves it clear, so absent devices time out instead of failing with -ENXIO) |
 | uSDHC1..3 | `imx-usdhc` | `imx8mm-usdhc`: SYS_CTRL[3:0] read as 1 (U-Boot does not set them, the generic core then refuses commands); INT_STATUS_EN resets to 0x117f013f; transfer-complete after R1b busy (eMMC CMD6 under Linux); no SDMA buffer boundary pauses (BLK_ATT has no boundary field) |
 | GPT1..6 | `imx7.gpt` | per-instance CCM clock view (`imx8mm.gpt-clock`) |
@@ -254,4 +258,6 @@ to host pages; the fault handler already works per host page.
 ## Tests
 
 `meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'`; the SoC
-work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test` and `kick-board-test`.
+work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test`, `kick-board-test` and
+`kick-uart-test` (UART registers and timing, UART DMA through SDMA1 including inferred
+scripts).

@@ -339,6 +339,7 @@ struct FslImx8mmState {
     bool                enet_phy_connected;
     uint32_t            sai_mclk_hz;
     char                *sdma_firmware;
+    bool                sdma_infer_scripts;
 
     /* Optional peripherals, see fsl_imx8mm_get_optional() */
     GHashTable         *optional;

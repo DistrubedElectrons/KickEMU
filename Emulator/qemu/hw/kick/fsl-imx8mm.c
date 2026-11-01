@@ -488,10 +488,14 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
 
     /*
      * UART1..4 on serial_hd(0..3). The UART raises its interrupt through
-     * the named "irq" output (the sysbus IRQ feeds its DMA request logic).
+     * the named "irq" output; its line timing follows the UARTn clock root.
      */
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         qdev_prop_set_chr(DEVICE(&s->uart[i]), "chardev", serial_hd(i));
+        object_property_set_link(OBJECT(&s->uart[i]), "ccm", OBJECT(&s->ccm),
+                                 &error_abort);
+        qdev_prop_set_uint32(DEVICE(&s->uart[i]), "ccm-root",
+                             IMX8MM_CCM_ROOT_UART1 + i * 0x80);
         if (!fsl_imx8mm_sysbus(s, &s->uart[i],
                                fsl_imx8mm_memmap[uart_mmap[i]].addr,
                                -1, errp)) {
@@ -664,8 +668,11 @@ static bool fsl_imx8mm_realize_optional(FslImx8mmState *s, Error **errp)
         if (!strcmp(o->type, TYPE_KICK_IMX8MM_SAI)) {
             qdev_prop_set_uint32(dev, "mclk1-hz", s->sai_mclk_hz);
         }
-        if (!strcmp(o->type, TYPE_KICK_IMX8MM_SDMA) && s->sdma_firmware) {
-            qdev_prop_set_string(dev, "firmware", s->sdma_firmware);
+        if (!strcmp(o->type, TYPE_KICK_IMX8MM_SDMA)) {
+            if (s->sdma_firmware) {
+                qdev_prop_set_string(dev, "firmware", s->sdma_firmware);
+            }
+            qdev_prop_set_bit(dev, "infer-scripts", s->sdma_infer_scripts);
         }
         /* Bus masters get the system address space for their DMA */
         if (object_property_find(OBJECT(dev), "dma-mr")) {
@@ -858,6 +865,8 @@ static const Property fsl_imx8mm_properties[] = {
     DEFINE_PROP_UINT32("sai-mclk-hz", FslImx8mmState, sai_mclk_hz, 12288000),
     /* SDMA RAM firmware the guest loads, for its script entry points */
     DEFINE_PROP_STRING("sdma-firmware", FslImx8mmState, sdma_firmware),
+    DEFINE_PROP_BOOL("sdma-infer-scripts", FslImx8mmState, sdma_infer_scripts,
+                     true),
 };
 
 static void fsl_imx8mm_class_init(ObjectClass *oc, const void *data)
