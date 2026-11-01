@@ -227,6 +227,32 @@ logged memory in host pages (16 KiB), and QEMU asserted when a logged section (a
 framebuffer, e.g. 800x480x4 bytes) did not cover whole host pages. The patch rounds the range
 to host pages; the fault handler already works per host page.
 
+Patch `0004-hvf-dirty-log-offset-of-a-write-fault.patch`: the write fault handler marked
+`ipa_page + xlat` dirty, but `xlat` already is the offset inside the RAM region. A guest
+write to a logged page in the upper half of RAM (KT_Kick's framebuffer) ran past the dirty
+bitmap and QEMU died with SIGSEGV in `bitmap_set_atomic`.
+
+## eMMC and SD storage
+
+uSDHC (`imx8mm_usdhc.c`) and QEMU's SD/eMMC card model, with these changes:
+
+- `MIX_CTRL.AC23EN`: Linux sends every multi-block eMMC transfer with Auto CMD23 and no
+  CMD12. The model sends CMD23 with the ARGUMENT2 (DS_ADDR) count before CMD18/CMD25;
+  without it the card stayed in the data/receive state and the first write of the root
+  file system mount failed (`card stuck in wrong state`, EIO). qtest
+  `kick-system-test/usdhc-auto-cmd23`.
+- Patch `0005-sd-emmc-erase-zeroes-the-range-at-once.patch`: an eMMC erase (CMD35/36/38,
+  which Linux issues for a discard, e.g. by mke2fs) zeroes the range with one
+  `blk_pwrite_zeroes(BDRV_REQ_MAY_UNMAP)` (EXT_CSD ERASED_MEM_CONT is 0) instead of writing
+  0xff block by block from the vCPU thread, which stalled the guest for minutes.
+- Patch `0006-file-posix-punch-holes-for-zero-writes-on-macos.patch`: with `discard=unmap`
+  on the drive (KickEmu sets `storage.discard`), zero writes punch holes on macOS, so the
+  images stay sparse.
+- Patch `0007-sd-check-the-medium-once-per-block.patch`: `blk_is_inserted()` was called for
+  every byte transferred and cost four times the write itself.
+- Card I/O is still synchronous in the main loop: a large write blocks the vCPUs, the SDMA
+  and the SAI for its duration (a few ms per 64 KiB descriptor batch).
+
 ## Known gaps
 
 - Clock tree: rates are computed for roots and PLLs; reset values of roots and gates are
