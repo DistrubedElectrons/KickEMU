@@ -1,0 +1,40 @@
+{
+  "run_dir": "${TMPDIR}/kickemu",
+  "qemu": {
+    "binary": "Emulator/out/qemu/bin/qemu-system-aarch64",
+    "machine": "kick",
+    "boot": "kernel",
+    "accel": "hvf",
+    "cpu": "host",
+    "tcg_cpu": "cortex-a53",
+    "smp": 4,
+    "memory_mb": 2048,
+    "audiodev": "coreaudio",
+    "ssh_host_port": 2222,
+    "extra_args": []
+  },
+  "boot": {
+    "defconfig": "Linux/buildroot/configs/KTKick_defconfig",
+    "board_dir": "Linux/buildroot/board/freescale/imx8mm_var_som",
+    "out_dir": "Emulator/out/boot",
+    "kernel_image": "Emulator/out/boot/Image",
+    "dtb": "Emulator/out/boot/imx8mm-var-som-symphony.dtb",
+    "imx_boot": "Emulator/out/boot/imx-boot",
+    "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw"
+  },
+  "storage": {
+    "emmc_image": "Emulator/out/images/emmc.img",
+    "emmc_size": "14G",
+    "sd_image": "Emulator/out/images/sd.img",
+    "sd_size": "8G",
+    "test_initrd": "Emulator/out/testimage/initramfs.cpio.gz"
+  },
+  "panel": {
+    "width": 800,
+    "height": 480
+  },
+  "midi": {
+    "virtual_in_name": "KICK MIDI In",
+    "virtual_out_name": "KICK MIDI Out"
+  }
+}

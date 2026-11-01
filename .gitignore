@@ -1,0 +1,10 @@
+# Local working notes
+TODO.md
+STRUCTURE.md
+CLAUDE.md
+
+# Emulator build output
+Emulator/out/
+
+# macOS
+.DS_Store
