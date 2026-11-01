@@ -30,6 +30,7 @@
 #include "imx8mm_anatop.h"
 #include "imx8mm_ccm.h"
 #include "imx8mm_cqhci.h"
+#include "imx8mm_ddrc.h"
 #include "imx8mm_dispmix.h"
 #include "imx8mm_gpc.h"
 #include "imx8mm_i2c.h"
@@ -42,6 +43,7 @@
 #include "imx8mm_sysctr.h"
 #include "imx8mm_tmu.h"
 #include "imx8mm_uart.h"
+#include "imx8mm_usdhc.h"
 #include "vivante_gpu.h"
 
 #define TYPE_FSL_IMX8MM "fsl-imx8mm"
@@ -300,6 +302,7 @@ struct FslImx8mmState {
     IMX8MMSNVSState     snvs;
     IMX8MMTMUState      tmu;
     IMX8MMSysCtrState   sysctr;
+    IMX8MMDDRCState     ddrc;
 
     IMXGPTState         gpt[FSL_IMX8MM_NUM_GPTS];
     OrIRQState          gpt5_gpt6_irq;
@@ -307,7 +310,7 @@ struct FslImx8mmState {
     IMX8MMUARTState     uart[FSL_IMX8MM_NUM_UARTS];
     IMX8MMI2CState      i2c[FSL_IMX8MM_NUM_I2CS];
     IMXSPIState         spi[FSL_IMX8MM_NUM_ECSPIS];
-    SDHCIState          usdhc[FSL_IMX8MM_NUM_USDHCS];
+    IMX8MMUSDHCState    usdhc[FSL_IMX8MM_NUM_USDHCS];
     IMX8MMCQHCIState    cqhci[FSL_IMX8MM_NUM_USDHCS];
     OrIRQState          usdhc_irq[FSL_IMX8MM_NUM_USDHCS];
     IMX2WdtState        wdt[FSL_IMX8MM_NUM_WDTS];

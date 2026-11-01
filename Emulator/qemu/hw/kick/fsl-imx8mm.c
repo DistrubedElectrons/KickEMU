@@ -209,6 +209,7 @@ static void fsl_imx8mm_init(Object *obj)
     object_initialize_child(obj, "snvs", &s->snvs, TYPE_IMX8MM_SNVS);
     object_initialize_child(obj, "tmu", &s->tmu, TYPE_IMX8MM_TMU);
     object_initialize_child(obj, "sysctr", &s->sysctr, TYPE_IMX8MM_SYSCTR);
+    object_initialize_child(obj, "ddrc", &s->ddrc, TYPE_IMX8MM_DDRC);
 
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         g_autofree char *name = g_strdup_printf("uart%d", i + 1);
@@ -237,7 +238,7 @@ static void fsl_imx8mm_init(Object *obj)
         g_autofree char *cq = g_strdup_printf("usdhc%d-cqhci", i + 1);
         g_autofree char *irq = g_strdup_printf("usdhc%d-irq", i + 1);
 
-        object_initialize_child(obj, name, &s->usdhc[i], TYPE_IMX_USDHC);
+        object_initialize_child(obj, name, &s->usdhc[i], TYPE_IMX8MM_USDHC);
         object_initialize_child(obj, cq, &s->cqhci[i], TYPE_IMX8MM_CQHCI);
         object_initialize_child(obj, irq, &s->usdhc_irq[i], TYPE_OR_IRQ);
     }
@@ -434,6 +435,12 @@ static bool fsl_imx8mm_realize_system(FslImx8mmState *s, Error **errp)
     sysbus_connect_irq(SYS_BUS_DEVICE(&s->snvs), 1,
                        fsl_imx8mm_irq(s, FSL_IMX8MM_SNVS_PWRKEY_IRQ));
 
+    /* DDR controller (MMIO 0) and DDR PHY (MMIO 1) */
+    if (!fsl_imx8mm_sysbus(s, &s->ddrc, MMAP(DDR_CTL), -1, errp)) {
+        return false;
+    }
+    sysbus_mmio_map(SYS_BUS_DEVICE(&s->ddrc), 1, MMAP(DDR_PHY));
+
     /* System counter: read, compare and control frames */
     if (!fsl_imx8mm_sysbus(s, &s->sysctr, MMAP(SYSCNT_RD),
                            FSL_IMX8MM_SYSCNT_IRQ, errp)) {
@@ -550,13 +557,6 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
         hwaddr base = MMAP(USDHC1) + i * 0x10000;
         DeviceState *orirq = DEVICE(&s->usdhc_irq[i]);
 
-        /*
-         * The 8MM uSDHC raises INT_STATUS.TC when the busy signalling of
-         * an R1b command ends; the 5.4 esdhc driver relies on it
-         * (MMC_CAP_WAIT_WHILE_BUSY) for eMMC CMD6. The generic imx-usdhc
-         * model suppresses that interrupt.
-         */
-        s->usdhc[i].quirks &= ~SDHCI_QUIRK_NO_BUSY_IRQ;
         qdev_prop_set_uint16(orirq, "num-lines", 2);
         if (!qdev_realize(orirq, NULL, errp)) {
             return false;
