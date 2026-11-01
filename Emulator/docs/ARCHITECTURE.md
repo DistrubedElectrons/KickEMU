@@ -45,7 +45,7 @@ the NXP i.MX 8M Mini Reference Manual, and the application code.
 | SNVS power key | input event, `KEY_STOP`/power | `kick_Hwpref.cpp` |
 | OCOTP fuses, SoC ID | `/sys/devices/soc0/*` | `kick_Hwpref.cpp`, U-Boot |
 | USB OTG gadget (FunctionFS `/dev/usb-utp0`, ACM `/dev/ttyGS0`) | PC mode / update | `kick_UsbFunctionFS.cpp` (later phase) |
-| Vivante GC GPU | galcore | Weston G2D (not emulated, software rendering) |
+| Vivante GC600 (3D) + GC520L (2D) GPU | galcore | Weston G2D: 2D pipe executed, 3D draws accepted but not rendered, see `display-gpu.md` |
 | AI camera | V4L2 | gesture control (later phase) |
 
 Pads, knobs, buttons, LEDs, jog wheel, slider and CV/gate are behind the MCU and reach

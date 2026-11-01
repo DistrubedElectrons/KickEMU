@@ -1,1 +1,30 @@
 # KICK (BE 0700-AAM) SoC, board and device models.
+
+config IMX8MM_DISPMIX
+    bool
+
+config IMX8MM_LCDIF
+    bool
+    select FRAMEBUFFER
+
+config IMX8MM_MIPI_DSIM
+    bool
+
+config SN65DSI83
+    bool
+    depends on I2C
+    select IMX8MM_MIPI_DSIM
+
+config VIVANTE_GPU
+    bool
+
+config KICK_DISPLAY_BENCH
+    bool
+    default y
+    depends on AARCH64
+    select IMX8MM_DISPMIX
+    select IMX8MM_LCDIF
+    select IMX8MM_MIPI_DSIM
+    select IMX_I2C
+    select SN65DSI83
+    select VIVANTE_GPU
