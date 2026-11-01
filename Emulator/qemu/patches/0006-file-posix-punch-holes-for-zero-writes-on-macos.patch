@@ -1,0 +1,29 @@
+diff --git a/block/file-posix.c b/block/file-posix.c
+--- a/block/file-posix.c
++++ b/block/file-posix.c
+@@ -2090,6 +2090,25 @@
+     default:
+         return ret;
+     }
++#elif defined(__APPLE__) && (__MACH__)
++    /*
++     * macOS has no fallocate(): punch the hole with F_PUNCHHOLE, after which
++     * the range reads as zeros (APFS, HFS+). Without this, zeroing a large
++     * range wrote every byte and allocated the whole sparse image.
++     * Unaligned ranges fail with EINVAL and take the write path below.
++     */
++    if (s->has_discard && !(aiocb->aio_type & QEMU_AIO_BLKDEV)) {
++        fpunchhole_t fpunchhole = {
++            .fp_flags = 0,
++            .reserved = 0,
++            .fp_offset = aiocb->aio_offset,
++            .fp_length = aiocb->aio_nbytes,
++        };
++
++        if (fcntl(s->fd, F_PUNCHHOLE, &fpunchhole) == 0) {
++            return 0;
++        }
++    }
+ #endif
+ 
+     /* If we couldn't manage to unmap while guaranteed that the area reads as
