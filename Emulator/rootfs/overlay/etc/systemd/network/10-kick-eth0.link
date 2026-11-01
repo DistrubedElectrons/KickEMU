@@ -1,0 +1,7 @@
+# Keep the kernel name eth0 for ENET1 (Debian's udev would call it end0). KT_Kick reads
+# /sys/class/net/eth0 and runs ifconfig/udhcpc on eth0, as on the KICK.
+[Match]
+Driver=fec
+
+[Link]
+Name=eth0
