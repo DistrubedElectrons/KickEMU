@@ -1,0 +1,24 @@
+diff --git a/target/arm/hvf/hvf.c b/target/arm/hvf/hvf.c
+--- a/target/arm/hvf/hvf.c
++++ b/target/arm/hvf/hvf.c
+@@ -2246,7 +2246,19 @@
+                 assert(!mr->readonly);
+ 
+                 if (memory_region_get_dirty_log_mask(mr)) {
+-                    memory_region_set_dirty(mr, ipa_page + xlat, page_size);
++                    /*
++                     * xlat is the offset of ipa inside mr: the host page
++                     * starts (ipa - ipa_page) bytes before it, clipped to
++                     * the region. ipa_page + xlat marked another page and,
++                     * for writes in the upper part of RAM, ran past the
++                     * end of the dirty bitmap (SIGSEGV).
++                     */
++                    hwaddr in_page = ipa - ipa_page;
++                    hwaddr start = xlat >= in_page ? xlat - in_page : 0;
++                    hwaddr len = MIN(page_size,
++                                     memory_region_size(mr) - start);
++
++                    memory_region_set_dirty(mr, start, len);
+                     hvf_unprotect_dirty_range(ipa_page, page_size);
+                 }
+ 
