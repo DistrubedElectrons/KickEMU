@@ -119,7 +119,10 @@ static void run_channel0(QTestState *qts, uint8_t cmd, uint16_t count,
     g_assert_cmphex(bd_status(qts, BD0) & BD_DONE, ==, 0);
 }
 
-/* sdma_load_context(): PC and gReg via C0_SETDM to 2048 + 32 * ch */
+/*
+ * sdma_load_context(): PC and gReg via C0_SETDM to 2048 + 32 * ch. The
+ * channel state (struct sdma_state_registers) is two words, gReg[0] is word 2.
+ */
 static void load_context(QTestState *qts, int ch, uint32_t pc,
                          const uint32_t greg[8])
 {
@@ -130,7 +133,7 @@ static void load_context(QTestState *qts, int ch, uint32_t pc,
     }
     qtest_writel(qts, CTX, pc);
     for (i = 0; i < 8; i++) {
-        qtest_writel(qts, CTX + 4 + i * 4, greg[i]);
+        qtest_writel(qts, CTX + 8 + i * 4, greg[i]);
     }
     run_channel0(qts, C0_SETDM, CTX_WORDS, CTX, 2048 + CTX_WORDS * ch);
 }
@@ -190,7 +193,7 @@ static void test_channel0_load(void)
     load_context(qts, 3, AP_2_AP, greg);
     run_channel0(qts, C0_GETDM, CTX_WORDS, BUF_B, 2048 + CTX_WORDS * 3);
     g_assert_cmphex(qtest_readl(qts, BUF_B), ==, AP_2_AP);
-    g_assert_cmphex(qtest_readl(qts, BUF_B + 4 * 7), ==, 7);
+    g_assert_cmphex(qtest_readl(qts, BUF_B + 4 * 8), ==, 7);   /* gReg[6] */
     g_assert_cmphex(sdma_rd(qts, INTR), ==, 0);
     qtest_quit(qts);
 }

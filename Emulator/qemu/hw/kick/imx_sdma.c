@@ -419,9 +419,14 @@ static uint32_t sdma_access_width(uint8_t command)
     return command == 0 || command > 3 ? 4 : command;
 }
 
+/*
+ * General register n of a channel context. The context starts with the
+ * two-word channel state (PC/RPC/SPC/EPC and flags, Linux struct
+ * sdma_state_registers), so gReg[0] is word 2.
+ */
 static uint32_t sdma_ctx_greg(IMXSDMAState *s, int ch, int n)
 {
-    return sdma_dm_read(s, SDMA_CTX_BASE + ch * sdma_ctx_words(s) + 1 + n);
+    return sdma_dm_read(s, SDMA_CTX_BASE + ch * sdma_ctx_words(s) + 2 + n);
 }
 
 static void sdma_start_script(IMXSDMAState *s, int ch)
