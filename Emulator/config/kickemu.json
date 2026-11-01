@@ -105,6 +105,7 @@
     "ssh_authorized_keys": "",
     "console_tty": "ttymxc3",
     "console_autologin": true,
+    "console_loglevel": 3,
     "board_overlay_files": [
       "etc/asound.conf",
       "usr/bin/kt_kick.sh",
