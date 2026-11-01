@@ -5,6 +5,7 @@
 #   meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'
 
 kick_qtests = [
+  'kick-dsim-test',
   'kick-lcdif-test',
 ]
 
