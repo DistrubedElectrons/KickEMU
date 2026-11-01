@@ -77,6 +77,7 @@ struct KickMachineState {
     char *emmc;
     char *sd;
     char *cv_chardev;
+    char *sdma_firmware;
     uint64_t soc_uid;
     uint64_t uboot_addr;
     uint64_t emmc_boot_part_size;
@@ -362,6 +363,10 @@ static void kick_init(MachineState *machine)
     object_property_set_bool(soc, "has-el2", !accel_hw, &error_abort);
     /* The SOM's AR8033 replaces the MAC's built-in PHY */
     object_property_set_bool(soc, "enet-phy-connected", false, &error_abort);
+    if (s->sdma_firmware) {
+        object_property_set_str(soc, "sdma-firmware", s->sdma_firmware,
+                                &error_abort);
+    }
     object_property_set_uint(OBJECT(&s->soc.ocotp), "unique-id", s->soc_uid,
                              &error_abort);
     /* Without ATF nothing would enable the system counter */
@@ -497,6 +502,7 @@ KICK_STR_PROP(boot)
 KICK_STR_PROP(emmc)
 KICK_STR_PROP(sd)
 KICK_STR_PROP(cv_chardev)
+KICK_STR_PROP(sdma_firmware)
 KICK_STR_PROP(rom_boot_device)
 
 #define KICK_INT_PROP(field, type)                                          \
@@ -550,6 +556,7 @@ static void kick_finalize(Object *obj)
     g_free(s->emmc);
     g_free(s->sd);
     g_free(s->cv_chardev);
+    g_free(s->sdma_firmware);
     g_free(s->rom_boot_device);
 }
 
@@ -613,6 +620,10 @@ static void kick_class_init(ObjectClass *oc, const void *data)
                               NULL, NULL);
     object_class_property_set_description(oc, "panel-height",
         "LCDIF scan-out height before the guest sets a mode");
+    object_class_property_add_str(oc, "sdma-firmware", kick_get_sdma_firmware,
+                                  kick_set_sdma_firmware);
+    object_class_property_set_description(oc, "sdma-firmware",
+        "sdma-imx7d.bin of the guest rootfs: RAM script entry points");
     object_class_property_add_bool(oc, "gt911-reset-wired",
                                    kick_get_gt911_reset_wired,
                                    kick_set_gt911_reset_wired);

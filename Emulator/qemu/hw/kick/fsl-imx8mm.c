@@ -664,6 +664,9 @@ static bool fsl_imx8mm_realize_optional(FslImx8mmState *s, Error **errp)
         if (!strcmp(o->type, TYPE_KICK_IMX8MM_SAI)) {
             qdev_prop_set_uint32(dev, "mclk1-hz", s->sai_mclk_hz);
         }
+        if (!strcmp(o->type, TYPE_KICK_IMX8MM_SDMA) && s->sdma_firmware) {
+            qdev_prop_set_string(dev, "firmware", s->sdma_firmware);
+        }
         /* Bus masters get the system address space for their DMA */
         if (object_property_find(OBJECT(dev), "dma-mr")) {
             object_property_set_link(OBJECT(dev), "dma-mr",
@@ -853,6 +856,8 @@ static const Property fsl_imx8mm_properties[] = {
                      enet_phy_connected, true),
     /* SAIn MCLK1 (SAIn clock root) as assigned by the board DT */
     DEFINE_PROP_UINT32("sai-mclk-hz", FslImx8mmState, sai_mclk_hz, 12288000),
+    /* SDMA RAM firmware the guest loads, for its script entry points */
+    DEFINE_PROP_STRING("sdma-firmware", FslImx8mmState, sdma_firmware),
 };
 
 static void fsl_imx8mm_class_init(ObjectClass *oc, const void *data)
