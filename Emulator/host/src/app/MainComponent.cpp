@@ -80,6 +80,10 @@ namespace kickemu
 
         addAndMakeVisible (*device);
         addAndMakeVisible (titleBar);
+        addChildComponent (presentationExit);
+        presentationExit.onClick = [this] { setPresentation (false); };
+        // Right clicks anywhere (the device included) reach mouseDown for the context menu
+        addMouseListener (this, true);
         addChildComponent (*sidePanel);
 
         // Analog pots keep their position between runs.
@@ -232,8 +236,11 @@ namespace kickemu
             sidePanel->setVisible (false);
             statusLine = {};
             device->setBounds (r);
+            presentationExit.setBounds (juce::Rectangle<int> (236, 34).withCentre ({ r.getCentreX(), r.getY() + 30 }));
+            presentationExit.toFront (false);
             return;
         }
+        presentationExit.setVisible (false);
 
         titleBar.setVisible (true);
         titleBar.setBounds (r.removeFromTop (titleHeight));
@@ -274,7 +281,11 @@ namespace kickemu
         repaint();
         device->grabKeyboardFocus();
         if (on)
-            showHint ("Presentation mode: Cmd+P or Esc with Cmd to leave");
+        {
+            // Show the way out for a moment, then only when the pointer nears the top
+            presentationExit.holdUntil = juce::Time::getMillisecondCounter() + 3500;
+            presentationExit.target = 1.0f;
+        }
     }
 
     void MainComponent::saveSnapshot()
@@ -362,8 +373,62 @@ namespace kickemu
         }
     }
 
+    void MainComponent::updatePresentationExit()
+    {
+        auto& p = presentationExit;
+        if (! presentation)
+        {
+            p.level = p.target = 0.0f;
+            p.setVisible (false);
+            return;
+        }
+        const auto mouse = getMouseXYRelative();
+        const bool near = getLocalBounds().contains (mouse) && mouse.y < 72;
+        p.target = (near || juce::Time::getMillisecondCounter() < p.holdUntil) ? 1.0f : 0.0f;
+        if (std::abs (p.level - p.target) < 0.01f)
+            p.level = p.target;
+        else
+            p.level += (p.target - p.level) * 0.25f;
+        p.setVisible (p.level > 0.01f);
+        p.setAlpha (p.level);
+    }
+
+    void MainComponent::mouseDown (const juce::MouseEvent& e)
+    {
+        // Context menu on the window background or the device body (not on controls)
+        if (! e.mods.isPopupMenu() || (e.eventComponent != this && e.eventComponent != device.get()))
+            return;
+        juce::PopupMenu menu;
+        menu.addItem (1, presentation ? "Leave presentation mode" : "Presentation mode", true, false);
+        menu.addItem (2, "Save snapshot");
+        menu.addItem (3, "Fit window to device");
+        menu.showMenuAsync (juce::PopupMenu::Options(), [this] (int id)
+        {
+            if (id == 1) setPresentation (! presentation);
+            if (id == 2) saveSnapshot();
+            if (id == 3) titleBar.scale.setSelectedId (fitItemId);
+        });
+    }
+
+    void PresentationExit::paint (juce::Graphics& g)
+    {
+        auto r = getLocalBounds().toFloat().reduced (1.0f);
+        g.setColour (juce::Colour (0xe0141417));
+        g.fillRoundedRectangle (r, r.getHeight() * 0.5f);
+        g.setColour (hover ? theme.accent : theme.chromeLine);
+        g.drawRoundedRectangle (r, r.getHeight() * 0.5f, 1.0f);
+        g.setColour (hover ? juce::Colours::white : theme.chromeText);
+        g.setFont (theme.uiFont (13.0f, true));
+        g.drawText ("Leave presentation", r.withTrimmedRight (r.getWidth() * 0.32f), juce::Justification::centredRight);
+        g.setColour (theme.chromeDim);
+        g.setFont (theme.uiFont (12.0f));
+        g.drawText ("Cmd+P", r.withTrimmedLeft (r.getWidth() * 0.72f), juce::Justification::centredLeft);
+    }
+
     void MainComponent::timerCallback()
     {
+        updatePresentationExit();
+
         // Side panel slide.
         if (std::abs (sideFraction - sideTarget) > 0.001f)
         {

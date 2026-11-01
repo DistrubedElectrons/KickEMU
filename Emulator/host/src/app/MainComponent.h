@@ -31,6 +31,34 @@ namespace kickemu
         a slide-out side panel, and a slim status line. Presentation mode hides
         everything but the device.
     */
+    /**
+        The way out of presentation mode for the mouse: a pill at the top edge that
+        fades in when the pointer comes near, and briefly when the mode starts.
+    */
+    class PresentationExit : public juce::Component
+    {
+    public:
+        explicit PresentationExit (const Theme& t) : theme (t) { setMouseCursor (juce::MouseCursor::PointingHandCursor); }
+
+        std::function<void()> onClick;
+
+        void paint (juce::Graphics& g) override;
+        void mouseEnter (const juce::MouseEvent&) override { hover = true; repaint(); }
+        void mouseExit (const juce::MouseEvent&) override { hover = false; repaint(); }
+        void mouseUp (const juce::MouseEvent& e) override
+        {
+            if (onClick && getLocalBounds().contains (e.getPosition()))
+                onClick();
+        }
+
+        float level = 0.0f, target = 0.0f;  // fade 0..1
+        juce::uint32 holdUntil = 0;         // ms counter: stay visible until then
+
+    private:
+        const Theme& theme;
+        bool hover = false;
+    };
+
     class MainComponent : public juce::Component, private juce::Timer
     {
     public:
@@ -61,6 +89,8 @@ namespace kickemu
         void applyScaleSelection (int itemId);
         void layoutChildren();
         void showHint (const juce::String& text);
+        void updatePresentationExit();
+        void mouseDown (const juce::MouseEvent& e) override;
 
         Session& session;
         AppSettings& settings;
@@ -70,6 +100,7 @@ namespace kickemu
         std::unique_ptr<PanelContext> panelContext;
         std::unique_ptr<DeviceView> device;
         TitleBar titleBar;
+        PresentationExit presentationExit { theme };
         std::unique_ptr<SidePanel> sidePanel;
         juce::TooltipWindow tooltips { this, 600 };
 

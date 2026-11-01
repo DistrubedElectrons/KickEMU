@@ -117,7 +117,9 @@ App shortcuts: `Cmd+P` presentation mode, `Cmd+Shift+S` snapshot, `Cmd+L` side p
 ### Presentation and snapshots
 
 Presentation mode shows only the device on a plain background (colour in the Settings tab,
-default `host.ui.presentation_background`). Snapshots are PNGs of the current view at
+default `host.ui.presentation_background`). To leave it: `Cmd+P`, the "Leave presentation"
+button that appears when the pointer nears the top edge, or right-click the device body.
+In Fit (`Cmd+0`) the window keeps the shape of the device while it is resized. Snapshots are PNGs of the current view at
 `host.ui.snapshot_scale` (2x) in `host.ui.snapshot_dir` (`~/Pictures/KickEmu`).
 
 ## Settings
