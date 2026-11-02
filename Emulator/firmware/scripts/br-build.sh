@@ -30,14 +30,14 @@ JOBS="${JOBS:-$(( $(nproc) + 1 ))}"
 
 # --- host packages ---------------------------------------------------------------------------
 export DEBIAN_FRONTEND=noninteractive
-if ! apt-get update -qq; then
-    log "deb.debian.org has no bullseye any more, using archive.debian.org"
-    cat > /etc/apt/sources.list <<'EOF'
+# Bullseye's security suite left deb.debian.org (404s while `apt-get update` still succeeds),
+# so always use the archive, which holds the whole release consistently.
+rm -f /etc/apt/sources.list.d/*
+cat > /etc/apt/sources.list <<'EOF'
 deb http://archive.debian.org/debian bullseye main
 deb http://archive.debian.org/debian-security bullseye-security main
 EOF
-    apt-get -o Acquire::Check-Valid-Until=false update -qq
-fi
+apt-get -o Acquire::Check-Valid-Until=false update -qq
 apt-get install -y -qq --no-install-recommends \
     build-essential bash patch gzip bzip2 perl tar cpio unzip rsync file bc wget \
     python3 git ca-certificates xz-utils zstd debianutils >/dev/null
