@@ -21,15 +21,16 @@
 # BR2_PACKAGE_IMX_PARSER is not set
 
 # --- Consequences of dropping the GPU userspace ---------------------------------------------
-# Weston's DRM backend needs an EGL provider (imx-gpu-viv or Mesa); without it Kconfig falls
-# back to the fbdev backend. Weston stays installed but is not started (overlay).
+# Weston: NXP's weston-imx enables its G2D renderer unconditionally (weston.mk passes no
+# -Drenderer-g2d), so it cannot configure without imx-gpu-g2d. The emulator image starts
+# KT_Kick on X instead (overlay replaces 71-weston-drm.rules), so Weston is not built.
+# BR2_PACKAGE_WESTON is not set
 # BR2_PACKAGE_WESTON_DEFAULT_DRM is not set
-BR2_PACKAGE_WESTON_DEFAULT_FBDEV=y
-# libepoxy needs EGL or GL, and Weston's XWayland needs libepoxy.
-# BR2_PACKAGE_LIBEPOXY is not set
+# BR2_PACKAGE_WESTON_X11 is not set
 # BR2_PACKAGE_WESTON_XWAYLAND is not set
-# The demo clients need GLES and EGL.
 # BR2_PACKAGE_WESTON_DEMO_CLIENTS is not set
+# libepoxy needs EGL or GL.
+# BR2_PACKAGE_LIBEPOXY is not set
 
 # --- Boot chain: QEMU loads the kernel directly ----------------------------------------------
 # U-Boot, ATF and imx-mkimage only make sense with the NXP DDR training firmware, and the
