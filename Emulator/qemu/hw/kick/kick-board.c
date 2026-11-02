@@ -570,6 +570,15 @@ static void kick_init(MachineState *machine)
     /* Without ATF nothing would enable the system counter */
     object_property_set_bool(OBJECT(&s->soc.sysctr), "start-enabled",
                              mode != KICK_BOOT_ROM, &error_abort);
+    /*
+     * UART2 is not wired on the KICK; the emulator uses it as the QEMU guest
+     * agent channel (qemu-ga, Emulator/docs/host-interface.md), whose file
+     * transfers would crawl at the 38400 baud qemu-ga programs. Nothing on the
+     * device depends on its timing, so it moves characters instantly. The MCU,
+     * MIDI and console UARTs keep line timing.
+     */
+    object_property_set_bool(OBJECT(&s->soc.uart[1]), "line-timing", false,
+                             &error_abort);
     kick_board_setup_sai2(s);
     /* Scan-out size the host sees until the guest programs a mode */
     qdev_prop_set_uint32(DEVICE(&s->soc.lcdif), "panel-width", s->panel_width);
