@@ -11,6 +11,7 @@
 #include "emu/QemuProcess.h"
 #include "emu/QmpClient.h"
 #include "emu/RfbClient.h"
+#include "instruments/InstrumentHub.h"
 #include "panel/RearPanel.h"
 
 #include <juce_events/juce_events.h>
@@ -75,6 +76,8 @@ namespace kickemu
         MidiBridge midi;
         CvBridge cv;
         ConsoleBridge console, uart2;
+        /** Scope/spectrum/multimeter sources (audio tap, CV) and the MIDI monitor. */
+        InstrumentHub instruments { config, cv, midi };
         SharedFramebuffer framebuffer;
         QmpClient qmp;
         RfbClient rfb;

@@ -117,6 +117,7 @@ namespace kickemu
         qmp.stop();
         uart2.stop();
         console.stop();
+        instruments.stop();
         cv.stop();
         midi.stop();
         mcu.stop();
@@ -200,7 +201,7 @@ namespace kickemu
         if (! runDir.createDirectory())
             return juce::Result::fail ("Cannot create run directory " + runDir.getFullPathName());
 
-        for (auto name : { "mcu", "uart2", "midi", "console", "qmp", "vnc", "cv", "automation" })
+        for (auto name : { "mcu", "uart2", "midi", "console", "qmp", "vnc", "cv", "audiotap", "automation" })
             if (! unixsocket::pathFits (config.getSocketPath (name).getFullPathName()))
                 return juce::Result::fail ("Socket path too long (sockaddr_un holds 104 bytes on macOS, 108 on Linux): " + config.getSocketPath (name).getFullPathName()
                                            + ". Set run_dir to a shorter directory.");
@@ -209,6 +210,7 @@ namespace kickemu
         if (! mcu.start (error)) return juce::Result::fail ("MCU socket: " + error);
         if (! midi.start (error)) return juce::Result::fail ("MIDI socket: " + error);
         if (! cv.start (error)) return juce::Result::fail ("CV socket: " + error);
+        if (! instruments.start (error)) return juce::Result::fail ("Audio tap socket: " + error);
         if (! console.start (error)) return juce::Result::fail ("Console socket: " + error);
         if (! uart2.start (error)) return juce::Result::fail ("UART2 socket: " + error);
 

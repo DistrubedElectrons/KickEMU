@@ -176,6 +176,11 @@ namespace kickemu
         if (cvProperty.isNotEmpty())
             machineProps.add (cvProperty + "=cv");
 
+        // Playback tap for the host instruments (host-interface.md, "Playback tap")
+        const auto tapProperty = config.getString ("qemu.audio_tap_property");
+        if (tapProperty.isNotEmpty())
+            machineProps.add (tapProperty + "=audiotap");
+
         // The kick machine defaults to direct kernel boot; U-Boot and BootROM boots are
         // machine boot modes, the image itself is placed below.
         const auto bootProperty = config.getString ("qemu.boot_property");
@@ -242,6 +247,8 @@ namespace kickemu
 
         if (cvProperty.isNotEmpty())
             chardev ("cv", "cv");
+        if (tapProperty.isNotEmpty())
+            chardev ("audiotap", "audiotap");
 
         // --- QMP and display (QEMU is the server) -------------------------------------------
         args.add ("-qmp");

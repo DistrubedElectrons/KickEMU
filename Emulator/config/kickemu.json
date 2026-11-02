@@ -13,6 +13,7 @@
     "audiodev_id": "snd0",
     "audio_property": "audiodev",
     "cv_property": "cv-chardev",
+    "audio_tap_property": "audio-tap",
     "emmc_property": "emmc",
     "sd_property": "sd",
     "boot_property": "boot-mode",
@@ -191,6 +192,7 @@
       "qmp": "qmp.sock",
       "vnc": "vnc.sock",
       "cv": "cv.sock",
+      "audiotap": "audiotap.sock",
       "automation": "automation.sock"
     },
     "ui": {
@@ -310,6 +312,7 @@
         "memory_mb": 1024,
         "audiodev": "",
         "cv_property": "",
+        "audio_tap_property": "",
         "emmc_property": "",
         "sd_property": "",
         "serial_order": ["console"],

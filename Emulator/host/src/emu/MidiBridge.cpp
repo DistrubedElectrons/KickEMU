@@ -92,6 +92,8 @@ namespace kickemu
         messagesFromGuest++;
         if (onGuestMessage)
             onGuestMessage (data, size);
+        if (onMonitor)
+            onMonitor (false, data, size);
         std::lock_guard<std::mutex> lock (outputLock);
         if (virtualOut != nullptr)
             virtualOut->sendMessageNow (message);
@@ -104,12 +106,15 @@ namespace kickemu
         if (! server.send (data, size))
             return false;
         messagesToGuest++;
+        if (onMonitor)
+            onMonitor (true, data, size);
         return true;
     }
 
     void MidiBridge::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)
     {
         messagesToGuest++;
-        server.send (message.getRawData(), (size_t) message.getRawDataSize());
+        if (server.send (message.getRawData(), (size_t) message.getRawDataSize()) && onMonitor)
+            onMonitor (true, message.getRawData(), (size_t) message.getRawDataSize());
     }
 }

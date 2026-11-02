@@ -55,7 +55,7 @@ public:
             expect (cmd.ok(), cmd.error);
             auto& a = cmd.args;
             expectEquals (a[0], fakeQemu.getFullPathName());
-            expectEquals (after (a, "-machine"), juce::String ("kick,emmc=emmc,sd=sd,audiodev=snd0,cv-chardev=cv"));
+            expectEquals (after (a, "-machine"), juce::String ("kick,emmc=emmc,sd=sd,audiodev=snd0,cv-chardev=cv,audio-tap=audiotap"));
             expectEquals (after (a, "-accel"), juce::String ("hvf"));
             expectEquals (after (a, "-cpu"), juce::String ("host"));
             expectEquals (after (a, "-m"), juce::String ("2048M"));
@@ -66,6 +66,7 @@ public:
             expect (after (a, "-chardev", 0).startsWith ("socket,id=mcu,path=" + tmp.getChildFile ("run/mcu.sock").getFullPathName()));
             expect (after (a, "-chardev", 0).endsWith (",reconnect-ms=500"));
             expect (after (a, "-chardev", 4).startsWith ("socket,id=cv,"));
+            expect (after (a, "-chardev", 5).startsWith ("socket,id=audiotap,path=" + tmp.getChildFile ("run/audiotap.sock").getFullPathName()));
             expectEquals (after (a, "-qmp"), "unix:" + tmp.getChildFile ("run/qmp.sock").getFullPathName() + ",server=on,wait=off");
             expectEquals (after (a, "-display"), "vnc=unix:" + tmp.getChildFile ("run/vnc.sock").getFullPathName());
             expectEquals (after (a, "-audiodev"), juce::String ("coreaudio,id=snd0"));
