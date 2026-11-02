@@ -14,6 +14,7 @@
 #include "app/Session.h"
 
 #include <BuildInfo.h>
+#include <csignal>
 #include <KickEmuResources.h>
 #include <cstdio>
 #include <thread>
@@ -102,6 +103,12 @@ namespace kickemu
 
         void initialise (const juce::String&) override
         {
+            // SIGTERM/SIGINT/SIGHUP quit like the menu does, so QEMU is shut down with us
+            // instead of being left running without its host.
+            for (int sig : { SIGTERM, SIGINT, SIGHUP })
+                std::signal (sig, [] (int) { quitSignalled = true; });
+            quitPoller.startTimer (100);
+
             cl = CommandLine::parse (getCommandLineParameterArray());
             if (cl.error.isNotEmpty())
             {
@@ -129,12 +136,17 @@ namespace kickemu
             for (auto& o : cl.overrides)
                 if (result.wasOk())
                     result = config->applyOverride (o);
-            // Headless runs make no sound unless a backend was chosen explicitly.
-            if (result.wasOk() && cl.headless && config->getString ("qemu.audiodev") == "auto")
+           #if JUCE_MAC
+            // Without a window there is nothing to switch to: no Dock icon either.
+            if (unattended())
+                juce::Process::setDockIconVisible (false);
+           #endif
+            // Headless and offscreen runs make no sound unless a backend was chosen explicitly.
+            if (result.wasOk() && unattended() && config->getString ("qemu.audiodev") == "auto")
                 result = config->applyOverride ("qemu.audiodev=none");
             if (result.failed())
             {
-                fail (result.getErrorMessage(), cl.headless);
+                fail (result.getErrorMessage(), unattended());
                 return;
             }
 
@@ -157,7 +169,7 @@ namespace kickemu
                 && ! cl.overrides.joinIntoString (" ").contains ("qemu.net"))
                 NetworkConfig::fromVar (juce::JSON::parse (net), NetworkConfig::fromConfig (*config)).toConfig (*config);
             // The audio backend picked on the panel's audio jacks, unless set on the command line.
-            if (auto dev = settings->getString ("audiodev"); dev.isNotEmpty() && ! cl.headless
+            if (auto dev = settings->getString ("audiodev"); dev.isNotEmpty() && ! unattended()
                 && ! cl.overrides.joinIntoString (" ").contains ("qemu.audiodev"))
                 config->set ("qemu.audiodev", dev);
             session = std::make_unique<Session> (*config);
@@ -169,7 +181,7 @@ namespace kickemu
 
             if (auto r = session->startBridges(); r.failed())
             {
-                fail (r.getErrorMessage(), cl.headless);
+                fail (r.getErrorMessage(), unattended());
                 return;
             }
 
@@ -363,6 +375,20 @@ namespace kickemu
             else
                 session->stopQemu();
         }
+
+        /** Nobody is looking at a window: no dialogs, no sound. */
+        bool unattended() const { return cl.headless || cl.render != juce::File(); }
+
+        static inline std::atomic<bool> quitSignalled { false };
+        struct QuitPoller : juce::Timer
+        {
+            void timerCallback() override
+            {
+                if (quitSignalled.exchange (false))
+                    if (auto* app = juce::JUCEApplicationBase::getInstance())
+                        app->systemRequestedQuit();
+            }
+        } quitPoller;
 
         void fail (const juce::String& message, bool headless)
         {

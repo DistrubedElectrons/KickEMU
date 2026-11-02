@@ -11,7 +11,11 @@ namespace kickemu
         o.osxLibrarySubFolder = "Application Support";
         o.storageFormat = juce::PropertiesFile::storeAsXML;
         o.millisecondsBeforeSaving = 500;
-        props = std::make_unique<juce::PropertiesFile> (o);
+        // Tests and scripted runs keep their settings away from the user's.
+        if (auto dir = juce::SystemStats::getEnvironmentVariable ("KICKEMU_SETTINGS_DIR", ""); dir.isNotEmpty())
+            props = std::make_unique<juce::PropertiesFile> (juce::File (dir).getChildFile ("KickEmu.settings"), o);
+        else
+            props = std::make_unique<juce::PropertiesFile> (o);
     }
 
     juce::File AppSettings::getFolder() const { return props->getFile().getParentDirectory(); }
