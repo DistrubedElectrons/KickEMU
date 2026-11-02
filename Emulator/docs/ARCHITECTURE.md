@@ -161,6 +161,7 @@ restart.
 | `qmp.sock` | `-qmp unix:...,server=on,wait=off` (QEMU is server) | n/a | QMP JSON |
 | `vnc.sock` | `-display vnc=unix:...` (QEMU is server) | panel | RFB 3.8 |
 | `cv.sock` | `-chardev socket,id=cv,path=...,reconnect-ms=500`, board property `cv-chardev=cv` | CV/Gate converter | JSON lines, see below |
+| `audiotap.sock` | `-chardev socket,id=audiotap,path=...,reconnect-ms=500`, board property `audio-tap=audiotap` | SAI2 playback | raw S32LE stereo frames, see host-interface.md |
 
 `serial_hd(0..3)` map to UART1..UART4 in that order.
 

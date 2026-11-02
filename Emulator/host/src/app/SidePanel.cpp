@@ -8,7 +8,8 @@ namespace kickemu
           uart2View (session.uart2, t, (float) session.config.getDouble ("host.ui.terminal_font_size", 13.0)),
           logView (session.log, t),
           ioView (session, settings, t),
-          settingsView (session, settings, t, std::move (keyboardMap))
+          settingsView (session, settings, t, std::move (keyboardMap)),
+          instrumentsView (session.instruments, t)
     {
         logView.getCommandLine = [&session] { return session.getLastCommandLine(); };
 
@@ -20,7 +21,8 @@ namespace kickemu
         tabs.addTab ("Log", bg, &logView, false);
         tabs.addTab ("I/O", bg, &ioView, false);
         tabs.addTab ("Settings", bg, &settingsView, false);
-        tabs.setCurrentTabIndex (juce::jlimit (0, 4, settings.getInt ("sidePanelTab", 0)), false);
+        tabs.addTab ("Measure", bg, &instrumentsView, false);
+        tabs.setCurrentTabIndex (juce::jlimit (0, 5, settings.getInt ("sidePanelTab", 0)), false);
         addAndMakeVisible (tabs);
     }
 

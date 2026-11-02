@@ -1,6 +1,7 @@
 #include "app/AutomationTools.h"
 
 #include "emu/NetworkConfig.h"
+#include "instruments/InstrumentTools.h"
 
 #include <contracts/dcl/dcl_contracts.h>
 #include <juce_events/juce_events.h>
@@ -74,6 +75,7 @@ namespace kickemu
         addPanelTools();
         addIoTools();
         addMediaTools();
+        addInstrumentTools (tools, session);
     }
 
     juce::String AutomationTools::instructions()

@@ -164,7 +164,14 @@ target_sources(KickEmu PRIVATE
     src/panel/SliderComponent.cpp
     src/panel/ScreenComponent.cpp
     src/panel/RearPanel.cpp
-    src/panel/PanelControl.cpp)
+    src/panel/PanelControl.cpp
+    # Measuring instruments: scope, spectrum analyser, multimeter, MIDI monitor
+    src/instruments/ScopeView.cpp
+    src/instruments/SpectrumView.cpp
+    src/instruments/MeterView.cpp
+    src/instruments/MidiMonitorView.cpp
+    src/instruments/InstrumentsView.cpp
+    src/instruments/InstrumentTools.cpp)
 
 target_compile_definitions(KickEmu PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:KickEmu,JUCE_PRODUCT_NAME>"
