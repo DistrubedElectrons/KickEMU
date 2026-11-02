@@ -9,14 +9,13 @@
 set -eu
 
 R=/rootfs
-apk add --no-cache e2fsprogs sfdisk >/dev/null
+apk add --no-cache e2fsprogs sfdisk coreutils >/dev/null
 
 mkdir -p "$R/etc/apk"
 cp -a /etc/apk/repositories /etc/apk/keys "$R/etc/apk/"
 # shellcheck disable=SC2086
-apk add --root "$R" --initdb --no-cache --no-scripts alpine-base $PACKAGES >/dev/null
-# Package triggers (fontconfig cache, mime, icon caches) need the target root as /.
-chroot "$R" /bin/sh -c 'apk fix --no-cache >/dev/null 2>&1 || true; fc-cache -f >/dev/null 2>&1 || true'
+# The container is arm64 like the target, so package scripts and triggers run as is.
+apk add --root "$R" --initdb --no-cache alpine-base $PACKAGES >/dev/null
 
 # Vendor kernel modules (USB HID, USB storage, ...): eudev loads them on hotplug.
 tar -xzf "/boot-out/modules-${KERNEL_RELEASE}.tar.gz" -C "$R"
@@ -74,6 +73,9 @@ Section "InputClass"
 EndSection
 EOF
 
+# The session starts from an init script, not a login on a VT: let it run X.
+printf 'allowed_users=anybody\nneeds_root_rights=yes\n' > "$R/etc/X11/Xwrapper.config"
+
 # Start Xfce as the desktop user once the system is up.
 cat > "$R/etc/local.d/desktop.start" <<'EOF'
 #!/bin/sh
@@ -89,5 +91,6 @@ truncate -s "$EMMC_SIZE" /out/emmc-desktop.img
 printf 'label: gpt\nstart=32768, size=%s, type=0FC63DAF-8483-4772-8E79-3D69D8477DE4, name=rootfs\n' \
     "$(( $(stat -c %s /out/rootfs.ext4) / 512 ))" | sfdisk -q /out/emmc-desktop.img
 dd if=/out/rootfs.ext4 of=/out/emmc-desktop.img bs=512 seek=32768 conv=notrunc,sparse status=none
-du -h --apparent-size /out/rootfs.ext4 /out/emmc-desktop.img
+rm -f /out/rootfs.ext4   # it lives on in p1
+du -h --apparent-size /out/emmc-desktop.img
 du -h /out/emmc-desktop.img
