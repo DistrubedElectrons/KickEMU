@@ -98,6 +98,7 @@ add_library(kickemu_core STATIC
     src/emu/TerminalModel.cpp
     src/emu/MidiBridge.cpp
     src/emu/ConsoleBridge.cpp
+    src/emu/GuestAgent.cpp
     # Instrument sources and measurement math (scope, spectrum, multimeter, MIDI monitor)
     src/instruments/SignalAnalysis.cpp
     src/instruments/InstrumentHub.cpp

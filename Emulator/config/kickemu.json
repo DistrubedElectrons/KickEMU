@@ -157,7 +157,8 @@
       "openrc", "eudev", "udev-init-scripts", "udev-init-scripts-openrc", "dbus", "dbus-x11", "kmod",
       "xorg-server", "xf86-video-fbdev", "xf86-input-evdev", "xinit", "xset",
       "xfce4", "xfce4-terminal", "xfce4-taskmanager", "mousepad", "adwaita-icon-theme", "font-dejavu",
-      "e2fsprogs", "util-linux", "alsa-utils", "evtest", "usbutils", "htop"
+      "e2fsprogs", "util-linux", "alsa-utils", "evtest", "usbutils", "htop",
+      "qemu-guest-agent", "qemu-guest-agent-openrc"
     ],
     "rootfs_size": "1536M",
     "emmc_size": "4G",

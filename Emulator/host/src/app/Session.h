@@ -5,6 +5,7 @@
 #include "config/Config.h"
 #include "emu/ConsoleBridge.h"
 #include "emu/CvBridge.h"
+#include "emu/GuestAgent.h"
 #include "emu/McuEmulator.h"
 #include "emu/MidiBridge.h"
 #include "emu/QemuCommandLine.h"
@@ -76,6 +77,8 @@ namespace kickemu
         MidiBridge midi;
         CvBridge cv;
         ConsoleBridge console, uart2;
+        /** qemu-ga in the guest on UART2: file transfer and exec (automation tools guest_*). */
+        GuestAgent agent { uart2 };
         /** Scope/spectrum/multimeter sources (audio tap, CV) and the MIDI monitor. */
         InstrumentHub instruments { config, cv, midi };
         SharedFramebuffer framebuffer;

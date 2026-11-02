@@ -28,10 +28,15 @@ namespace kickemu
 
         std::function<void (const juce::uint8*, size_t)> onRawOutput;
 
+        /** Off while a protocol (the guest agent on UART2) owns the port: its traffic is
+            kept out of the terminal. */
+        void setTerminalEnabled (bool on) { terminalEnabled = on; }
+
     private:
         const Config& config;
         juce::String name;
         UartServer server;
         TerminalModel model;
+        std::atomic<bool> terminalEnabled { true };
     };
 }

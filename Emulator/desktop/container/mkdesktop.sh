@@ -67,6 +67,10 @@ chroot "$R" chown -R kick:kick /home/kick/.config
 for s in devfs dmesg mdev; do rm -f "$R/etc/runlevels/sysinit/$s"; done
 for s in udev udev-trigger udev-settle; do ln -sf "/etc/init.d/$s" "$R/etc/runlevels/sysinit/$s"; done
 for s in dbus networking; do ln -sf "/etc/init.d/$s" "$R/etc/runlevels/default/$s"; done
+
+# QEMU guest agent on UART2 (/dev/ttymxc1): KickEmu's guest_push/guest_pull/guest_exec.
+printf 'GA_METHOD="isa-serial"\nGA_PATH="/dev/ttymxc1"\n' > "$R/etc/conf.d/qemu-guest-agent"
+ln -sf /etc/init.d/qemu-guest-agent "$R/etc/runlevels/default/qemu-guest-agent"
 ln -sf /etc/init.d/local "$R/etc/runlevels/default/local"
 
 # X on fb0 (the eLCDIF scan-out), touch via evdev; no GLX (software rendering only).

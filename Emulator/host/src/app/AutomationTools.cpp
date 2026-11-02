@@ -793,6 +793,81 @@ namespace kickemu
                          return r;
                      } });
 
+        // Guest agent (qemu-ga on UART2): files in and out, programs with exit codes.
+        tools.add ({ "guest_ping", "Check that the guest agent (qemu-ga on /dev/ttymxc1) answers; returns its version.", Schema(),
+                     [this] (const juce::var&)
+                     {
+                         juce::String version;
+                         auto r = session.agent.ping (version);
+                         return r.wasOk() ? ToolResult::ok (object ({ { "version", version } })) : ToolResult::fail (r.getErrorMessage());
+                     } });
+
+        tools.add ({ "guest_push", "Copy a host file into the guest through the guest agent.",
+                     Schema().string ("path", "host file", true).string ("dest", "absolute path in the guest", true)
+                             .string ("mode", "octal permissions, e.g. 755 (default: leave as created, 0644)"),
+                     [this, file] (const juce::var& a)
+                     {
+                         const auto local = file (a, "path");
+                         const auto mode = args::str (a, "mode");
+                         const auto t0 = juce::Time::getMillisecondCounterHiRes();
+                         if (mode.isNotEmpty() && ! mode.containsOnly ("01234567"))
+                             return ToolResult::fail ("mode must be octal, e.g. 755");
+                         auto r = session.agent.push (local, args::str (a, "dest"),
+                                                      mode.isEmpty() ? -1 : (int) std::strtol (mode.toRawUTF8(), nullptr, 8));
+                         if (r.failed())
+                             return ToolResult::fail (r.getErrorMessage());
+                         const auto ms = juce::Time::getMillisecondCounterHiRes() - t0;
+                         return ToolResult::ok (object ({ { "bytes", local.getSize() }, { "ms", juce::roundToInt (ms) },
+                                                          { "kib_per_s", juce::roundToInt ((double) local.getSize() / 1024.0 / juce::jmax (0.001, ms / 1000.0)) } }));
+                     } });
+
+        tools.add ({ "guest_pull", "Copy a file out of the guest to the host through the guest agent.",
+                     Schema().string ("path", "file in the guest", true).string ("dest", "host file", true),
+                     [this, file] (const juce::var& a)
+                     {
+                         juce::int64 bytes = 0;
+                         auto r = session.agent.pull (args::str (a, "path"), file (a, "dest"), bytes);
+                         return r.wasOk() ? ToolResult::ok (object ({ { "bytes", bytes }, { "path", file (a, "dest").getFullPathName() } }))
+                                          : ToolResult::fail (r.getErrorMessage());
+                     } });
+
+        tools.add ({ "guest_exec",
+                     "Run a program in the guest through the guest agent and return its exit code, stdout and stderr. "
+                     "Pass `command` for a /bin/sh -c command line, or `path` plus `args`.",
+                     Schema().string ("command", "shell command line").string ("path", "program (no shell)")
+                             .array ("args", "string", "arguments for path").string ("input", "text for stdin")
+                             .integer ("timeout_ms", "default 30000"),
+                     [this] (const juce::var& a)
+                     {
+                         juce::String path = args::str (a, "path");
+                         juce::StringArray argv;
+                         if (auto command = args::str (a, "command"); command.isNotEmpty())
+                         {
+                             path = "/bin/sh";
+                             argv = { "-c", command };
+                         }
+                         else if (auto* list = a["args"].getArray())
+                         {
+                             for (auto& v : *list)
+                                 argv.add (v.toString());
+                         }
+                         if (path.isEmpty())
+                             return ToolResult::fail ("pass command or path");
+                         const auto input = args::str (a, "input");
+                         GuestAgent::ExecResult res;
+                         auto r = session.agent.exec (path, argv, juce::MemoryBlock (input.toRawUTF8(), input.getNumBytesAsUTF8()),
+                                                      args::integer (a, "timeout_ms", 30000), res);
+                         if (r.failed())
+                             return ToolResult::fail (r.getErrorMessage());
+                         auto out = object ({ { "exit_code", res.exitCode }, { "pid", res.pid },
+                                              { "stdout", res.out.toString() }, { "stderr", res.err.toString() } });
+                         if (res.signal != 0)
+                             out.getDynamicObject()->setProperty ("signal", res.signal);
+                         if (res.timedOut)
+                             out.getDynamicObject()->setProperty ("timed_out", true);
+                         return ToolResult::ok (out);
+                     } });
+
         tools.add ({ "usb_attach",
                      "Plug a device into a USB port: storage (raw image), keyboard, mouse, tablet, or host "
                      "(pass through a host device by vendor/product id).",

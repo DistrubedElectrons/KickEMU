@@ -8,7 +8,8 @@ namespace kickemu
     {
         server.onData = [this] (const juce::uint8* data, size_t size)
         {
-            model.feed (data, size);
+            if (terminalEnabled)
+                model.feed (data, size);
             if (onRawOutput)
                 onRawOutput (data, size);
         };
