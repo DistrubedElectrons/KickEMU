@@ -18,10 +18,12 @@
 #define ROOT_UART1          0xaf00
 #define ROOT_UART4          0xb080
 #define ROOT_GPT1           0xb580
+#define ROOT_PWM1           0xb380
 
 /* CCM_CCGR indices */
 #define CCGR_GPT1           16
 #define CCGR_I2C1           23      /* I2C1..I2C4 are 23..26 */
+#define CCGR_PWM1           40
 #define CCGR_UART1          73
 #define CCGR_UART4          76
 #define CCGR_DISPMIX        93

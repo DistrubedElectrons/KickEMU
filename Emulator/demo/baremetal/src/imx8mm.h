@@ -11,6 +11,7 @@
 
 #define GPIO1_BASE          0x30200000u     /* GPIOn at + (n - 1) * 0x10000 */
 #define TMU_BASE            0x30260000u
+#define PWM1_BASE           0x30660000u     /* panel backlight on the KICK */
 #define GPT1_BASE           0x302d0000u
 #define OCOTP_BASE          0x30350000u
 #define ANATOP_BASE         0x30360000u

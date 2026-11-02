@@ -195,6 +195,20 @@ int main(void)
     gfx_init(&fb, KICK_FB_ADDR, KICK_FB_WIDTH, KICK_FB_HEIGHT);
     screen_init(&fb, &info);
     lcdif_start(&panel_mode, KICK_FB_ADDR);
+
+    /*
+     * Backlight: PWM1 drives the panel LEDs (pwm-backlight in the KICK device
+     * tree: 1 kHz, default level 80 of 100). Same sequence as Linux' pwm-imx27:
+     * software reset, period, sample, then enable with the ipg clock source.
+     */
+    clock_root(ROOT_PWM1, 0, 1, 1);
+    clock_gate(CCGR_PWM1, 1);
+    wr32(PWM1_BASE + 0x00, 1u << 3);                 /* PWMCR.SWR */
+    while (rd32(PWM1_BASE + 0x00) & (1u << 3)) {
+    }
+    wr32(PWM1_BASE + 0x10, OSC_24M_HZ / 1000 - 2);   /* PWMPR: 1 kHz */
+    wr32(PWM1_BASE + 0x0c, (OSC_24M_HZ / 1000) * 80 / 100);  /* PWMSAR: 80 % */
+    wr32(PWM1_BASE + 0x00, (1u << 16) | 1u);         /* CLKSRC ipg, EN */
     kprintf(C_CYAN "Display" C_RESET "  LCDIF %ux%u XRGB8888 at 0x%08x\n\n",
             KICK_FB_WIDTH, KICK_FB_HEIGHT, KICK_FB_ADDR);
 
