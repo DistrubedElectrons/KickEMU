@@ -79,7 +79,7 @@ connects the emulated MIDI, audio and CV ports to the host.
 | USB: both ChipIdea controllers as EHCI hosts | Storage and keyboard enumerate and hot-plug; host passthrough (libusb) built, untested |
 | Network: ENET + AR8033 | NAT with port forwards working; vmnet (macOS, needs root) and TAP/bridge/macvtap (Linux) selectable, untested |
 | KICK application (KT_Kick) on Debian 12 (`--profile kick-app`) | Runs with screen, touch, MCU link, audio and network |
-| Alpine Linux with Xfce (`--profile alpine-desktop`) | Desktop on the panel in about 25 s, touch and USB input |
+| Alpine Linux with Xfce (`--profile alpine-desktop`) | Desktop on the panel in about 25 s, touch and USB input; starts [kick-hwtest](Emulator/desktop/hwtest) (21 checks, front panel LEDs) |
 | KICK Buildroot image from `Linux/buildroot` | Built in GitHub Actions without the NXP EULA parts; in progress |
 
 Open items are listed in [Emulator/docs/soc.md](Emulator/docs/soc.md#known-gaps).
@@ -113,6 +113,11 @@ Emulator/rootfs/build.sh && $KICKEMU --profile kick-app      # Debian 12 with KT
 Emulator/desktop/build.sh && $KICKEMU --profile alpine-desktop   # Alpine with Xfce
 ```
 
+<p align="center">
+  <img src="Emulator/docs/images/kickemu-linux.webp" alt="KickEmu on Linux running the bare-metal demo" width="640"><br>
+  <sub>KickEmu on Linux (Ubuntu 24.04 arm64 under Xvfb), bare-metal demo</sub>
+</p>
+
 The full build guide is in [Emulator/README.md](Emulator/README.md), the root file system
 for the app in [Emulator/rootfs/README.md](Emulator/rootfs/README.md), the CI-built firmware
 image in [Emulator/firmware/README.md](Emulator/firmware/README.md).
@@ -135,10 +140,16 @@ buttons and pads, touch the screen, send MIDI, swap SD cards and attach USB devi
 running instance, including the GUI, also serves the same tools on `<run_dir>/automation.sock`.
 Tools, exit codes and a Python client: [Emulator/docs/automation.md](Emulator/docs/automation.md).
 
-<p align="center">
-  <img src="Emulator/docs/images/alpine-desktop.jpg" alt="Alpine Linux with Xfce on the emulated KICK panel" width="640"><br>
-  <sub>Alpine Linux with Xfce on the emulated 1024x600 panel, captured through MCP</sub>
-</p>
+<table>
+  <tr>
+    <td><img src="Emulator/docs/images/alpine-device.webp" alt="Alpine Linux with Xfce on the emulated KICK" width="400"></td>
+    <td><img src="Emulator/docs/images/kick-hwtest.webp" alt="kick-hwtest on Alpine lighting the pads, SHIFT and PLAY held" width="400"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Alpine Linux with Xfce, 50 s after power-on (HVF, rendered offscreen)</sub></td>
+    <td align="center"><sub><a href="Emulator/desktop/hwtest">kick-hwtest</a>: 21 checks passed, then pads, keys, knob and slider driven through MCP</sub></td>
+  </tr>
+</table>
 
 | Shortcut | Action |
 |---|---|
@@ -171,6 +182,7 @@ Tools, exit codes and a Python client: [Emulator/docs/automation.md](Emulator/do
 | [Emulator/boot](Emulator/boot) | Container build of kernel, DTBs, GPU module, ATF, U-Boot, imx-boot |
 | [Emulator/testimage](Emulator/testimage) | Alpine test image with `kick-selftest` |
 | [Emulator/desktop](Emulator/desktop) | Alpine Linux desktop image (Xfce) |
+| [Emulator/desktop/hwtest](Emulator/desktop/hwtest) | `kick-hwtest`: hardware report and front panel demo for Linux on the KICK |
 | [Emulator/firmware](Emulator/firmware) | CI build of the KICK Buildroot image |
 | [Emulator/tools](Emulator/tools) | Python MCP client, smoke test, Linux dependencies |
 | [Emulator/rootfs](Emulator/rootfs) | Debian 12 root file system with the KICK application |
