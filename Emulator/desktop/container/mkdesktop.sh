@@ -37,7 +37,32 @@ echo "root:${ROOT_PASSWORD}" | chroot "$R" chpasswd
 # Desktop user that X runs as.
 chroot "$R" adduser -D -s /bin/sh kick
 echo "kick:${ROOT_PASSWORD}" | chroot "$R" chpasswd
-for g in video input audio tty; do chroot "$R" addgroup kick "$g" 2>/dev/null || true; done
+chroot "$R" addgroup -S i2c
+for g in video input audio tty dialout i2c; do chroot "$R" addgroup kick "$g" 2>/dev/null || true; done
+
+# kick-hwtest (Emulator/desktop/hwtest): hardware report and front panel demo, started in a
+# terminal when the desktop comes up. It talks to the MCU on ttymxc0 (dialout), reads the SOM
+# EEPROM through i2c-dev and sweeps the backlight, so the desktop user gets access to those.
+apk add --no-cache build-base linux-headers >/dev/null
+gcc -O2 -Wall -Wextra -static -s -I/repo/Emulator/demo/baremetal/src \
+    -o "$R/usr/local/bin/kick-hwtest" \
+    /repo/Emulator/desktop/hwtest/kick-hwtest.c /repo/Emulator/demo/baremetal/src/pktmgr.c
+cat > "$R/etc/udev/rules.d/99-kick-hwtest.rules" <<'EOF'
+SUBSYSTEM=="i2c-dev", GROUP="i2c", MODE="0660"
+SUBSYSTEM=="backlight", RUN+="/bin/chgrp video /sys%p/brightness", RUN+="/bin/chmod g+w /sys%p/brightness"
+EOF
+mkdir -p "$R/usr/share/applications" "$R/home/kick/.config/autostart"
+cat > "$R/usr/share/applications/kick-hwtest.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=KICK hardware test
+Comment=Check the hardware and light up the front panel
+Icon=utilities-system-monitor
+Categories=System;
+Exec=xfce4-terminal --maximize --hide-menubar --font="Monospace 10" -T "KICK hardware test" -x kick-hwtest
+EOF
+cp "$R/usr/share/applications/kick-hwtest.desktop" "$R/home/kick/.config/autostart/"
+chroot "$R" chown -R kick:kick /home/kick/.config
 
 for s in devfs dmesg mdev; do rm -f "$R/etc/runlevels/sysinit/$s"; done
 for s in udev udev-trigger udev-settle; do ln -sf "/etc/init.d/$s" "$R/etc/runlevels/sysinit/$s"; done
