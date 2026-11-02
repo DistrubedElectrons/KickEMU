@@ -6,11 +6,34 @@
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <cstdio>
 
 namespace kickemu
 {
+    namespace
+    {
+        /** Binds 127.0.0.1:@port (0 = any) and returns the port it got, or 0. */
+        int bindLoopback (int port)
+        {
+            const int fd = ::socket (AF_INET, SOCK_STREAM, 0);
+            if (fd < 0)
+                return 0;
+            sockaddr_in a {};
+            a.sin_family = AF_INET;
+            a.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
+            a.sin_port = htons ((uint16_t) port);
+            socklen_t len = sizeof (a);
+            int got = 0;
+            if (::bind (fd, (sockaddr*) &a, sizeof (a)) == 0 && ::getsockname (fd, (sockaddr*) &a, &len) == 0)
+                got = ntohs (a.sin_port);
+            ::close (fd);
+            return got;
+        }
+    }
+
     // ------------------------------------------------------------------------------------
     // LogBuffer
 
@@ -230,6 +253,18 @@ namespace kickemu
             return false;
 
         peripherals.prepareCommandLine();
+        // The SSH forward's host port may be taken (another KickEmu, a local sshd), and
+        // QEMU refuses to start then. Take a free port for this run and say so.
+        if (auto net = NetworkConfig::fromConfig (config); net.mode == "user" && net.sshPort > 0 && bindLoopback (net.sshPort) == 0)
+        {
+            if (const int port = bindLoopback (0); port > 0)
+            {
+                log.add ("host", "Port " + juce::String (net.sshPort) + " is in use: SSH into the guest on 127.0.0.1:"
+                                 + juce::String (port) + " for this run");
+                net.sshPort = port;
+                net.toConfig (config);
+            }
+        }
         auto host = QemuCommandLine::Host::detect();
         // macvtap: QEMU inherits the tap device opened here (no O_CLOEXEC); the
         // parent closes its copy once the child runs.
