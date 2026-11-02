@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: Linux ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Dependencies
+        run: sudo Emulator/tools/install-deps-linux.sh
+
+      - name: QEMU build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            Emulator/out/qemu-build
+            Emulator/out/qemu
+          key: qemu-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('.gitmodules', 'Emulator/qemu/**') }}
+          restore-keys: qemu-${{ runner.os }}-${{ matrix.arch }}-
+
+      - name: QEMU with the kick machine
+        run: Emulator/qemu/build.sh
+
+      - name: kick qtests
+        run: meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
+
+      - name: KickEmu host and unit tests
+        run: |
+          cmake -S Emulator/host -B Emulator/out/host -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build Emulator/out/host
+          ctest --test-dir Emulator/out/host --output-on-failure
+
+      - name: Bare-metal demo
+        run: |
+          cmake -S Emulator/demo/baremetal -B Emulator/out/demo -G Ninja
+          cmake --build Emulator/out/demo
+
+      - name: Headless boot (--expect)
+        run: >
+          Emulator/out/host/KickEmu_artefacts/Release/KickEmu --profile demo --run-dir /tmp/kemu-expect
+          --set qemu.network=false --expect 'KICK bare-metal demo' --timeout 300
+
+      - name: MCP smoke test
+        run: Emulator/tools/smoke_demo.py --timeout 300 --screenshot panel-${{ matrix.arch }}.png
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: panel-linux-${{ matrix.arch }}
+          path: panel-${{ matrix.arch }}.png
+          if-no-files-found: ignore
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Dependencies
+        run: brew install glib pixman dtc libslirp ninja meson llvm lld
+
+      - name: QEMU build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            Emulator/out/qemu-build
+            Emulator/out/qemu
+          key: qemu-macos-${{ hashFiles('.gitmodules', 'Emulator/qemu/**') }}
+          restore-keys: qemu-macos-
+
+      - name: QEMU with the kick machine
+        run: Emulator/qemu/build.sh
+
+      - name: kick qtests
+        run: meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
+
+      - name: KickEmu host and unit tests
+        run: |
+          cmake -S Emulator/host -B Emulator/out/host -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build Emulator/out/host
+          ctest --test-dir Emulator/out/host --output-on-failure
+
+      - name: Bare-metal demo
+        run: |
+          cmake -S Emulator/demo/baremetal -B Emulator/out/demo -G Ninja
+          cmake --build Emulator/out/demo
+
+      # GitHub's macOS VMs have no nested virtualisation: accel=auto picks TCG.
+      - name: MCP smoke test
+        run: >
+          Emulator/tools/smoke_demo.py --timeout 300 --screenshot panel-macos.png
+          --binary Emulator/out/host/KickEmu_artefacts/Release/KickEmu.app/Contents/MacOS/KickEmu
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: panel-macos
+          path: panel-macos.png
+          if-no-files-found: ignore
