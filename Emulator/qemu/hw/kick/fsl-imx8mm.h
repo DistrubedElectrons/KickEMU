@@ -43,6 +43,7 @@
 #include "imx8mm_sysctr.h"
 #include "imx8mm_tmu.h"
 #include "imx8mm_uart.h"
+#include "imx8mm_usb.h"
 #include "imx8mm_usdhc.h"
 #include "vivante_gpu.h"
 
@@ -66,6 +67,7 @@ enum FslImx8mmConfiguration {
     /* 128 shared peripheral interrupts (RM table 3-1) */
     FSL_IMX8MM_NUM_IRQS         = 128,
     FSL_IMX8MM_NUM_UARTS        = 4,
+    FSL_IMX8MM_NUM_USBS         = 2,
     FSL_IMX8MM_NUM_USDHCS       = 3,
     FSL_IMX8MM_NUM_WDTS         = 3,
 };
@@ -315,6 +317,7 @@ struct FslImx8mmState {
     OrIRQState          usdhc_irq[FSL_IMX8MM_NUM_USDHCS];
     IMX2WdtState        wdt[FSL_IMX8MM_NUM_WDTS];
     IMXFECState         enet;
+    IMX8MMUSBState      usb[FSL_IMX8MM_NUM_USBS];
 
     /* Display path and GPU (docs/display-gpu.md) */
     IMX8MMDispMixState  dispmix;

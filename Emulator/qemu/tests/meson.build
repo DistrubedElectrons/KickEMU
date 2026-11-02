@@ -21,6 +21,7 @@ kick_qtests = [
   'kick-sdma-test',
   'kick-system-test',
   'kick-uart-test',
+  'kick-usb-test',
 ]
 
 qtests_aarch64 += kick_qtests

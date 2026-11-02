@@ -22,6 +22,7 @@ config FSL_IMX8MM
     select OR_IRQ
     select SDHCI
     select UNIMP
+    select USB_CHIPIDEA
     select VIVANTE_GPU
     select WDT_IMX2
 

@@ -99,7 +99,7 @@ the KICK) and at EL1 under HVF; `boot-mode=rom` starts SPL at EL3.
 | 0x32e1_0000 | 64 KiB | MIPI DSIM | `imx8mm-mipi-dsim` |
 | 0x32e2_0000 / 0x32e3_0000 | | CSI1 / MIPI CSI | unimplemented |
 | 0x32e2_8000 | 32 KiB | Display block control | `imx8mm-dispmix` |
-| 0x32e4_0000 / 0x32e5_0000 | | USB OTG1 / OTG2 | unimplemented |
+| 0x32e4_0000 / 0x32e5_0000 | 64 KiB each | USB1 (OTG, USB-C) / USB2 (USB-A), usbmisc at +0x200 | `imx8mm-usb` (QEMU `usb-chipidea` EHCI, host role), buses `usb-c.0` / `usb-a.0` |
 | 0x32f0_0000 / 0x32f8_0000 | | PCIe PHY / TZASC | unimplemented |
 | 0x3300_0000 / 0x3300_2000 | | APBH DMA / GPMI | unimplemented |
 | 0x3380_0000 | 4 MiB | PCIe | unimplemented |
@@ -133,6 +133,7 @@ to blocks without a model, and to parts of a slot a model does not decode, are l
 | 26..29 | UART1..UART4 | | 95, 96 | SAI1, SAI2 |
 | 31..33 | ECSPI1..ECSPI3 | | 103 | SDMA2 |
 | 34 | SDMA3 | | 120 | ENET1 MAC (queue 0 and other events) |
+| 40, 41 | USB1, USB2 | | | |
 | 35..38 | I2C1..I2C4 | | 121 | ENET1 IEEE 1588 timer |
 
 PPIs: generic timer secure 13, non-secure 14, virtual 11, hypervisor 10; GIC maintenance 9;
@@ -298,6 +299,44 @@ Verified with the vendor kernel and the test image: `arecord -D hw:0,0 -f S32_LE
 `audio-wav-out` set: the output file contains input frames 0..47999 bit-exact and contiguous.
 qtest `kick-audio-test`.
 
+## USB
+
+USB1 (0x32e40000, SPI 40, the OTG port on USB-C) and USB2 (0x32e50000, SPI 41, USB-A) are
+`imx8mm-usb`: QEMU's `usb-chipidea` (EHCI capability registers at 0x100, operational at
+0x140, PORTSC1 at 0x184, DCCPARAMS reporting host capability only) plus:
+
+- the ChipIdea root port's integrated transaction translator: full- and low-speed devices
+  are enabled by the port reset and `PORTSC1.PSPD` (27:26) reports the device speed, which
+  the 5.4 `ehci-hcd` reads for TDI controllers (`hcd->has_tt`). Plain QEMU EHCI enables
+  high-speed devices only and leaves PSPD at 0 (Linux would see everything as full speed
+  and refuse full-speed devices). QEMU's EHCI runs full-speed transfers without split
+  transactions; isochronous full-speed (siTD) is not implemented by it.
+- usbmisc at +0x200 (`fsl,imx7d-usbmisc` ops): CTRL1 resets to 0x30001000 (the value
+  `usbmisc_imx7d_power_lost_check()` tests), the rest is storage, PHY_STATUS reads 0.
+
+The PHY is `usb-nop-xceiv` (no registers). ci_hdrc runs host role on both: USB2 is
+`dr_mode = "host"`, USB1 is `"otg"` but its gadget part fails (`doesn't support gadget`,
+DCCPARAMS without DC), so it stays host; no gadget emulation. The controllers' device ids
+`usb-c` / `usb-a` name their buses `usb-c.0` / `usb-a.0`. Patch
+`0009-usb-device-path-of-a-sysbus-host-controller-with-an-id.patch` makes the migration id
+of a USB device include that controller id: without it, devices on port 1 of both
+controllers had the same id and QEMU aborted in `vmstate_register`.
+
+QEMU's USB core puts its own full-speed `usb-hub` on a bus's last free port when a device
+is attached without `port=`, so with one root port every such device sits behind that hub
+and runs at full speed (12 Mb/s; Linux logs "not running at top speed"). `port=1` attaches
+one device directly to the root port at its own speed (480 Mb/s for `usb-storage`), but then
+the bus has no room for a second device.
+
+Verified with the vendor kernel and the test image (after `modprobe usb-storage sd_mod
+usbhid`, which the test image does not hot-load): both `ci_hdrc` hosts register (`USB 2.0
+started, EHCI 1.00`); `-device usb-storage,bus=usb-c.0,port=1` enumerates as a 480 Mb/s
+device and `/dev/sda` reads the image; `-device usb-kbd,bus=usb-a.0` enumerates behind the
+hub and registers "QEMU QEMU USB Keyboard" via hid-generic; `device_add usb-storage` on
+`usb-a.0` at run time gives `/dev/sdb` (32 MiB read at about 12 MB/s), and `device_del`
+disconnects it. `usb-host` passthrough is built (libusb) but was not tried with a real
+device. qtest `kick-usb-test`.
+
 ## Known gaps
 
 - Clock tree: rates are computed for roots and PLLs; reset values of roots and gates are
@@ -308,7 +347,7 @@ qtest `kick-audio-test`.
 - NXP SiP services (`IMX_SIP_*`) are not provided by QEMU's PSCI: power domain calls return
   "not supported" (the 5.4 driver ignores it), `imx_busfreq` fails to probe with -22. With
   `boot-mode=rom` the real ATF provides them.
-- APBH DMA (mxs-dma probe fails with a reset timeout), CAAM (job rings fail), PWM, USB,
+- APBH DMA (mxs-dma probe fails with a reset timeout), CAAM (job rings fail), PWM,
   PCIe, VPU, CSI, MU, FlexSPI, ANA_OSC, DDR block control: unimplemented-device only.
 - TMU interrupt and GPIO1 per-pin interrupts not wired; SNVS long-press power off and
   security monitor not modelled; HP RTC alarm not modelled.
@@ -336,4 +375,5 @@ scripts) and `kick-sd-test` (SD slot insert/eject: PRES_STATE, INT_STATUS, the u
 interrupt and the GPIO1_IO10 card detect, including the delayed re-insertion and a card
 present at start-up) and `kick-audio-test` (SAI2 WAV recording through qom-set and at exit,
 WAV input 16/24-bit mono/float with saturation, end-of-file silence and looping, pacing,
-rejected files).
+rejected files) and `kick-usb-test` (EHCI/usbmisc registers, full- and high-speed root
+port enable and PSPD, devices on both buses).

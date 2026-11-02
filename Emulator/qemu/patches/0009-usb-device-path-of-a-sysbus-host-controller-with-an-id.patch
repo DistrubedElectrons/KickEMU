@@ -1,0 +1,21 @@
+diff --git a/hw/usb/bus.c b/hw/usb/bus.c
+index 3b6fbd46a..1c9a13278 100644
+--- a/hw/usb/bus.c
++++ b/hw/usb/bus.c
+@@ -561,6 +561,16 @@ static char *usb_get_dev_path(DeviceState *qdev)
+     DeviceState *hcd = qdev->parent_bus->parent;
+     char *id = qdev_get_dev_path(hcd);
+ 
++    /*
++     * A host controller on a bus without device paths (sysbus) gives every
++     * device the bare port path, so devices on the same port of two such
++     * controllers collide in the migration stream. Use the controller's id
++     * when the board gave it one.
++     */
++    if (!id && hcd->id) {
++        id = g_strdup(hcd->id);
++    }
++
+     if (id) {
+         char *ret = g_strdup_printf("%s/%s", id, dev->port->path);
+         g_free(id);

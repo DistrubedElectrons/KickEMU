@@ -251,6 +251,11 @@ static void fsl_imx8mm_init(Object *obj)
         object_initialize_child(obj, name, &s->wdt[i], TYPE_IMX2_WDT);
     }
     object_initialize_child(obj, "enet1", &s->enet, TYPE_IMX_ENET);
+    for (i = 0; i < FSL_IMX8MM_NUM_USBS; i++) {
+        g_autofree char *name = g_strdup_printf("usb%d", i + 1);
+
+        object_initialize_child(obj, name, &s->usb[i], TYPE_IMX8MM_USB);
+    }
     object_initialize_child(obj, "dispmix", &s->dispmix, TYPE_IMX8MM_DISPMIX);
     object_initialize_child(obj, "lcdif", &s->lcdif, TYPE_IMX8MM_LCDIF);
     object_initialize_child(obj, "mipi-dsim", &s->dsim, TYPE_IMX8MM_MIPI_DSIM);
@@ -609,6 +614,28 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
     }
     sysbus_connect_irq(SYS_BUS_DEVICE(&s->enet), 1,
                        fsl_imx8mm_irq(s, FSL_IMX8MM_ENET1_1588_IRQ));
+
+    /*
+     * USB1 (OTG, the KICK's USB-C port) and USB2 (host, USB-A) in host
+     * role. The device ids name their USB buses "usb-c.0" and "usb-a.0"
+     * (docs/host-interface.md), so devices attach with bus=usb-a.0.
+     */
+    for (i = 0; i < FSL_IMX8MM_NUM_USBS; i++) {
+        static const char *const bus_id[FSL_IMX8MM_NUM_USBS] = {
+            "usb-c", "usb-a"
+        };
+        hwaddr base = MMAP(USB1) + i * 0x10000;
+        DeviceState *dev = DEVICE(&s->usb[i]);
+
+        g_free(dev->id);
+        dev->id = g_strdup(bus_id[i]);
+        if (!fsl_imx8mm_sysbus(s, &s->usb[i], base,
+                               FSL_IMX8MM_USB1_IRQ + i, errp)) {
+            return false;
+        }
+        sysbus_mmio_map(SYS_BUS_DEVICE(dev), 1,
+                        base + IMX8MM_USBMISC_OFFSET);
+    }
     return true;
 }
 
