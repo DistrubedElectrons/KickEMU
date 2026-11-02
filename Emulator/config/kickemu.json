@@ -4,12 +4,12 @@
     "binary": "Emulator/out/qemu/bin/qemu-system-aarch64",
     "machine": "kick",
     "boot": "kernel",
-    "accel": "hvf",
+    "accel": "auto",
     "cpu": "host",
     "tcg_cpu": "cortex-a53",
     "smp": 4,
     "memory_mb": 2048,
-    "audiodev": "coreaudio",
+    "audiodev": "auto",
     "audiodev_id": "snd0",
     "audio_property": "audiodev",
     "cv_property": "cv-chardev",
@@ -154,7 +154,8 @@
     "sd_image": "Emulator/out/images/sd.img",
     "sd_size": "8G",
     "test_initrd": "Emulator/out/testimage/initramfs.cpio.gz",
-    "use_test_initrd": false
+    "use_test_initrd": false,
+    "discard": "unmap"
   },
   "panel": {
     "width": 1024,

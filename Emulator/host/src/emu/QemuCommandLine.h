@@ -21,5 +21,19 @@ namespace kickemu
         juce::String toShellString() const;
 
         static QemuCommandLine build (const Config& config);
+
+        /** Host facts that pick "auto" values; injectable for tests. */
+        struct Host
+        {
+            bool macOS = false, linux = false, arm64 = false;
+            bool kvmUsable = false;          // /dev/kvm can be opened read-write
+            juce::String audioDriver;        // what audiodev=auto resolves to
+            static Host detect();
+        };
+
+        /** qemu.accel=auto: hvf on macOS, kvm on an arm64 Linux host with /dev/kvm, else tcg. */
+        static juce::String resolveAccel (const juce::String& configured, const Host& host);
+
+        static QemuCommandLine build (const Config& config, const Host& host);
     };
 }

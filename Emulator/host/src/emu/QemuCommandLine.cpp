@@ -1,5 +1,9 @@
 #include "emu/QemuCommandLine.h"
 
+#include <fcntl.h>
+#include <sys/utsname.h>
+#include <unistd.h>
+
 namespace kickemu
 {
     namespace
@@ -33,7 +37,61 @@ namespace kickemu
         return quoted.joinIntoString (" ");
     }
 
+    QemuCommandLine::Host QemuCommandLine::Host::detect()
+    {
+        Host h;
+       #if JUCE_MAC
+        h.macOS = true;
+       #elif JUCE_LINUX
+        h.linux = true;
+       #endif
+        utsname u {};
+        if (uname (&u) == 0)
+            h.arm64 = juce::String (u.machine) == "arm64" || juce::String (u.machine) == "aarch64";
+        if (h.linux)
+        {
+            int fd = ::open ("/dev/kvm", O_RDWR | O_CLOEXEC);
+            h.kvmUsable = fd >= 0;
+            if (fd >= 0)
+                ::close (fd);
+        }
+
+        // audiodev=auto: the native API on macOS; on Linux the first sound server
+        // that is actually running, then ALSA if there is a sound card, else none.
+        if (h.macOS)
+            h.audioDriver = "coreaudio";
+        else
+        {
+            auto runtime = juce::File (juce::SystemStats::getEnvironmentVariable ("XDG_RUNTIME_DIR", {}));
+            if (runtime != juce::File() && runtime.getChildFile ("pipewire-0").exists())
+                h.audioDriver = "pipewire";
+            else if (runtime != juce::File() && runtime.getChildFile ("pulse/native").exists())
+                h.audioDriver = "pa";
+            else if (juce::File ("/dev/snd").isDirectory())
+                h.audioDriver = "alsa";
+            else
+                h.audioDriver = "none";
+        }
+        return h;
+    }
+
+    juce::String QemuCommandLine::resolveAccel (const juce::String& configured, const Host& host)
+    {
+        if (configured != "auto")
+            return configured;
+        if (host.macOS && host.arm64)
+            return "hvf";
+        if (host.linux && host.arm64 && host.kvmUsable)
+            return "kvm";
+        return "tcg";
+    }
+
     QemuCommandLine QemuCommandLine::build (const Config& config)
+    {
+        return build (config, Host::detect());
+    }
+
+    QemuCommandLine QemuCommandLine::build (const Config& config, const Host& host)
     {
         QemuCommandLine cmd;
         auto& args = cmd.args;
@@ -53,7 +111,7 @@ namespace kickemu
         }
 
         const auto boot = config.getString ("qemu.boot", "kernel");
-        auto accel = config.getString ("qemu.accel", "tcg");
+        auto accel = resolveAccel (config.getString ("qemu.accel", "auto"), host);
         if (boot == "rom" && accel != "tcg")
         {
             cmd.warnings.add ("boot=rom runs the BootROM, SPL and ATF at EL3, which needs TCG; using tcg instead of " + accel);
@@ -63,27 +121,44 @@ namespace kickemu
         // --- storage (decides which machine properties can be set) ---------------------
         juce::StringArray machineProps;
         juce::StringArray driveArgs;
-        auto addDrive = [&] (const juce::String& id, const juce::String& imageKey, const juce::String& propKey)
+        bool haveBootableImage = false;
+        // Guest discards and eMMC erases punch holes into the sparse images.
+        const auto discard = config.getString ("storage.discard", "unmap");
+        auto addDrive = [&] (const juce::String& id, const juce::String& imageKey, const juce::String& propKey, bool removable)
         {
             auto prop = config.getString (propKey);
             if (prop.isEmpty())
                 return;
             auto image = config.getPath (imageKey);
+            juce::String spec = "if=none,id=" + id;
             if (image.existsAsFile())
             {
-                driveArgs.add ("-drive");
-                driveArgs.add ("if=none,id=" + id + ",file=" + image.getFullPathName() + ",format=raw");
-                machineProps.add (prop + "=" + id);
+                spec << ",file=" << image.getFullPathName() << ",format=raw";
+                haveBootableImage = true;
+                if (discard.isNotEmpty())
+                    spec << ",discard=" << discard;
+            }
+            else if (removable)
+            {
+                // Empty slot: the drive exists so a card can be inserted at run time.
+                if (image != juce::File())
+                    cmd.warnings.add (id + " image not found, starting with an empty slot: " + image.getFullPathName());
             }
             else
             {
                 cmd.warnings.add (id + " image not found, starting without it: " + image.getFullPathName());
+                return;
             }
+            driveArgs.add ("-drive");
+            driveArgs.add (spec);
+            machineProps.add (prop + "=" + id);
         };
-        addDrive ("emmc", "storage.emmc_image", "qemu.emmc_property");
-        addDrive ("sd", "storage.sd_image", "qemu.sd_property");
+        addDrive ("emmc", "storage.emmc_image", "qemu.emmc_property", false);
+        addDrive ("sd", "storage.sd_image", "qemu.sd_property", true);
 
-        const auto audiodev = config.getString ("qemu.audiodev");
+        auto audiodev = config.getString ("qemu.audiodev");
+        if (audiodev == "auto")
+            audiodev = host.audioDriver.isNotEmpty() ? host.audioDriver : juce::String ("none");
         const auto audiodevId = config.getString ("qemu.audiodev_id", "snd0");
         if (audiodev.isNotEmpty() && config.getString ("qemu.audio_property").isNotEmpty())
             machineProps.add (config.getString ("qemu.audio_property") + "=" + audiodevId);
@@ -247,7 +322,7 @@ namespace kickemu
         }
         else if (boot == "rom")
         {
-            if (driveArgs.isEmpty() && cmd.error.isEmpty())
+            if (! haveBootableImage && cmd.error.isEmpty())
                 cmd.error = "boot=rom needs an eMMC or SD image holding imx-boot (storage.emmc_image / storage.sd_image)";
         }
         else if (boot == "firmware")

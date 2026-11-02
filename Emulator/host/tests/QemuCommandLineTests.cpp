@@ -46,7 +46,7 @@ public:
             expect (cmd.ok(), cmd.error);
             auto& a = cmd.args;
             expectEquals (a[0], fakeQemu.getFullPathName());
-            expectEquals (after (a, "-machine"), juce::String ("kick,emmc=emmc,audiodev=snd0,cv-chardev=cv"));
+            expectEquals (after (a, "-machine"), juce::String ("kick,emmc=emmc,sd=sd,audiodev=snd0,cv-chardev=cv"));
             expectEquals (after (a, "-accel"), juce::String ("hvf"));
             expectEquals (after (a, "-cpu"), juce::String ("host"));
             expectEquals (after (a, "-m"), juce::String ("2048M"));
@@ -65,6 +65,8 @@ public:
             expectEquals (after (a, "-dtb"), dtb.getFullPathName());
             expect (after (a, "-append").contains ("console=ttymxc3"));
             expect (after (a, "-drive").startsWith ("if=none,id=emmc,file="));
+            expect (after (a, "-drive").endsWith (",format=raw,discard=unmap"));
+            expectEquals (after (a, "-drive", 1), juce::String ("if=none,id=sd"));   // empty slot, hot-insertable
             expectEquals (cmd.warnings.size(), 1); // missing SD image
         }
 
