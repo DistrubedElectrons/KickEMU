@@ -1,0 +1,76 @@
+# Emulator variant of configs/KTKick_defconfig (Kconfig fragment).
+#
+# Applied on top of KTKick_defconfig by Emulator/firmware/scripts/br-build.sh, followed by
+# olddefconfig. Every line of the defconfig that this file does not override, and every line
+# below, must survive olddefconfig unchanged (check-config.py fails the build otherwise).
+# "# X is not set" means: X must not be enabled, and string/hex options must be absent.
+#
+# @FIRMWARE_DIR@ is replaced with the absolute path of Emulator/firmware at build time.
+
+# --- NXP EULA software: not redistributable in a public image -------------------------------
+# firmware-imx (SDMA, VPU, DDR training blobs); the emulated SDMA works without it.
+# BR2_PACKAGE_FIRMWARE_IMX is not set
+# BR2_PACKAGE_FIRMWARE_IMX_DMEM_LEN is not set
+# Vivante GPU userspace and G2D. The kernel module (GPL-2.0) stays.
+# BR2_PACKAGE_IMX_GPU_G2D is not set
+# BR2_PACKAGE_IMX_GPU_G2D_EXAMPLES is not set
+# BR2_PACKAGE_IMX_GPU_VIV is not set
+# BR2_PACKAGE_IMX_GPU_VIV_OUTPUT_WL is not set
+# NXP audio/video codecs and parsers.
+# BR2_PACKAGE_IMX_CODEC is not set
+# BR2_PACKAGE_IMX_PARSER is not set
+
+# --- Consequences of dropping the GPU userspace ---------------------------------------------
+# Weston's DRM backend needs an EGL provider (imx-gpu-viv or Mesa); without it Kconfig falls
+# back to the fbdev backend. Weston stays installed but is not started (overlay).
+# BR2_PACKAGE_WESTON_DEFAULT_DRM is not set
+BR2_PACKAGE_WESTON_DEFAULT_FBDEV=y
+# libepoxy needs EGL or GL, and Weston's XWayland needs libepoxy.
+# BR2_PACKAGE_LIBEPOXY is not set
+# BR2_PACKAGE_WESTON_XWAYLAND is not set
+# The demo clients need GLES and EGL.
+# BR2_PACKAGE_WESTON_DEMO_CLIENTS is not set
+
+# --- Boot chain: QEMU loads the kernel directly ----------------------------------------------
+# U-Boot, ATF and imx-mkimage only make sense with the NXP DDR training firmware, and the
+# board's post-image scripts assemble imx-boot from them.
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE is not set
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE_CUSTOM_GIT is not set
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE_CUSTOM_REPO_URL is not set
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE_CUSTOM_REPO_VERSION is not set
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE_PLATFORM is not set
+# BR2_TARGET_ARM_TRUSTED_FIRMWARE_BL31 is not set
+# BR2_TARGET_UBOOT is not set
+# BR2_TARGET_UBOOT_BUILD_SYSTEM_KCONFIG is not set
+# BR2_TARGET_UBOOT_CUSTOM_GIT is not set
+# BR2_TARGET_UBOOT_CUSTOM_REPO_URL is not set
+# BR2_TARGET_UBOOT_CUSTOM_REPO_VERSION is not set
+# BR2_TARGET_UBOOT_PATCH is not set
+# BR2_TARGET_UBOOT_USE_CUSTOM_CONFIG is not set
+# BR2_TARGET_UBOOT_CUSTOM_CONFIG_FILE is not set
+# BR2_TARGET_UBOOT_NEEDS_DTC is not set
+# BR2_TARGET_UBOOT_FORMAT_CUSTOM is not set
+# BR2_TARGET_UBOOT_FORMAT_CUSTOM_NAME is not set
+# BR2_TARGET_UBOOT_SPL is not set
+# BR2_PACKAGE_HOST_IMX_MKIMAGE is not set
+BR2_ROOTFS_POST_IMAGE_SCRIPT=""
+BR2_ROOTFS_POST_SCRIPT_ARGS=""
+
+# --- Emulator additions -----------------------------------------------------------------------
+# Start KT_Kick on X on fb0 (overlay, post-build script).
+BR2_ROOTFS_OVERLAY="board/freescale/imx8mm_var_som/rootfs_overlay @FIRMWARE_DIR@/overlay"
+BR2_ROOTFS_POST_BUILD_SCRIPT="@FIRMWARE_DIR@/buildroot/post-build.sh"
+BR2_PACKAGE_XAPP_XINIT=y
+# Run-time and build dependencies of KT_Kick (JUCE X11, ALSA, JACK, multitouch patch).
+BR2_PACKAGE_ALSA_LIB=y
+BR2_PACKAGE_FREETYPE=y
+BR2_PACKAGE_FONTCONFIG=y
+BR2_PACKAGE_XLIB_LIBX11=y
+BR2_PACKAGE_XLIB_LIBXEXT=y
+BR2_PACKAGE_XLIB_LIBXINERAMA=y
+BR2_PACKAGE_XLIB_LIBXRANDR=y
+BR2_PACKAGE_XLIB_LIBXCURSOR=y
+BR2_PACKAGE_XLIB_LIBXRENDER=y
+BR2_PACKAGE_XLIB_LIBXI=y
+# kick-storage-mkfs (board overlay) runs e2label and mkfs.ext4 on first boot.
+BR2_PACKAGE_E2FSPROGS=y

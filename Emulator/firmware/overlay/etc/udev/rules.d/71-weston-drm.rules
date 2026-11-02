@@ -1,0 +1,2 @@
+# Emulator image: replaces the board rule that starts weston@root.service on fb0/card0.
+# Weston would take the framebuffer and VT from X (ktkick.service); see 71-kick-x.rules.

@@ -1,0 +1,28 @@
+# Emulator image: KT_Kick on X on the framebuffer. Replaces the board overlay's unit.
+#
+# The KICK runs Weston on DRM with the Vivante EGL stack and KT_Kick as an X client of
+# Xwayland on :0. That stack is NXP EULA software and is left out of this image, so X runs
+# directly on /dev/fb0 (fbdev driver) with the KICK's own start script, kt_kick.sh (waits
+# 15 s, then starts /usr/bin/KT_Kick), as its only client. udev starts this unit when fb0
+# appears (71-kick-x.rules), as 71-weston-drm.rules does for Weston on the KICK.
+# Resource limits as in the KICK's ktkick.service.
+[Unit]
+Description=KT_Kick on X (framebuffer)
+Wants=network.target
+After=syslog.target network-online.target systemd-udev-trigger.service sound.target
+ConditionPathExists=/usr/bin/KT_Kick
+
+[Service]
+Type=simple
+WorkingDirectory=/home/Kick
+ExecStart=/usr/bin/xinit /bin/sh /usr/bin/kt_kick.sh -- /usr/bin/Xorg :0 vt7 -nocursor -nolisten tcp -s 0 -dpms
+Restart=on-failure
+RestartSec=2
+KillMode=process
+CPUWeight=20
+CPUQuota=85%
+IOWeight=20
+MemorySwapMax=0
+
+[Install]
+WantedBy=multi-user.target

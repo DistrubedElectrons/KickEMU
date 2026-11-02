@@ -1,0 +1,2 @@
+# As 71-weston-drm.rules on the KICK: the framebuffer pulls in the graphical session.
+ACTION=="add", SUBSYSTEM=="graphics", KERNEL=="fb0", TAG+="systemd", ENV{SYSTEMD_WANTS}+="ktkick.service"
