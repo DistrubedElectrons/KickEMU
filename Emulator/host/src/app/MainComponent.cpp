@@ -521,6 +521,8 @@ namespace kickemu
             menu.showMenuAsync (juce::PopupMenu::Options());
     }
 
+    void MainComponent::tickDevice() { device->tick(); }
+
     void MainComponent::showHint (const juce::String& text)
     {
         hint = text;

@@ -16,6 +16,7 @@ namespace kickemu
         bool printCommand = false;      // --print-command
         bool noAutostart = false;       // --no-start
         juce::File screenshot;          // --screenshot <png>: save the window and quit
+        juce::File render;              // --render <png>: draw the UI offscreen (no window) and quit
         int screenshotDelayMs = 4000;   // --screenshot-delay <ms>
         juce::String screenshotView;    // --view top|rear|front
         bool presentation = false;      // --presentation

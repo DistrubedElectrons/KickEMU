@@ -81,6 +81,9 @@ namespace kickemu
         void setPresentation (bool on);
         bool isPresentation() const { return presentation; }
         void saveSnapshot();
+        /** Steps the panel animation once. The view animates on vblank, which only
+            exists for a component on screen; offscreen rendering drives it here. */
+        void tickDevice();
         void setSidePanelOpen (bool open, bool animate = true);
 
     private:

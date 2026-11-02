@@ -33,6 +33,7 @@ namespace kickemu
             else if (a.startsWith ("--config")) cl.configFile = juce::File::getCurrentWorkingDirectory().getChildFile (value());
             else if (a.startsWith ("--profile")) cl.profile = value();
             else if (a == "--set") cl.overrides.add (value());
+            else if (a.startsWith ("--render")) cl.render = juce::File::getCurrentWorkingDirectory().getChildFile (value());
             else if (a.startsWith ("--screenshot-delay")) cl.screenshotDelayMs = value().getIntValue();
             else if (a.startsWith ("--screenshot")) cl.screenshot = juce::File::getCurrentWorkingDirectory().getChildFile (value());
             else if (a.startsWith ("--view")) cl.screenshotView = value();
@@ -71,7 +72,9 @@ namespace kickemu
                "  --view <top|rear|front>  view to show at start\n"
                "  --presentation       start in presentation mode (device only)\n"
                "  --screenshot <png>   save a 2x image of the window after a delay, then quit\n"
-               "  --screenshot-delay <ms>  delay before --screenshot (default 4000)\n"
+               "  --screenshot-delay <ms>  delay before --screenshot/--render (default 4000)\n"
+               "  --render <png>       like --screenshot, but drawn offscreen: no window appears\n"
+               "                       (with --view and --presentation; for CI and docs)\n"
                "  --version            print version, branch and commit\n"
                "  -h, --help           this help\n"
                "\n"

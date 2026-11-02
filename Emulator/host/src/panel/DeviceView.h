@@ -46,8 +46,10 @@ namespace kickemu
         /** Text listing the keyboard map, for the help panel. */
         juce::StringArray describeKeyboard() const;
 
-    private:
+        /** One animation step (normally driven by vblank, which needs an on-screen peer). */
         void tick();
+
+    private:
         void releaseAllKeys();
         static int keyCodeFor (const juce::String& name);
 

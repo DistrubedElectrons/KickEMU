@@ -225,6 +225,32 @@ namespace kickemu
 
             if (cl.screenshotView.isNotEmpty())
                 settings->set ("view", juce::StringArray { "top", "rear", "front" }.indexOf (cl.screenshotView));
+
+            if (cl.render != juce::File())
+            {
+                // The real UI, never added to the desktop: it paints into an image only.
+                offscreen = std::make_unique<MainComponent> (*session, *settings);
+                offscreen->setSize (1180, 1000);
+                if (cl.presentation)
+                    offscreen->setPresentation (true);
+                if (! cl.noAutostart && config->getBool ("host.autostart", true))
+                    session->startQemu();
+                juce::Timer::callAfterDelay (cl.screenshotDelayMs, [this, target = cl.render]
+                {
+                    for (int i = 0; i < 12; ++i)   // let LED fades reach their targets
+                    {
+                        offscreen->tickDevice();
+                        juce::Thread::sleep (16);
+                    }
+                    auto image = offscreen->createComponentSnapshot (offscreen->getLocalBounds(), true, 2.0f);
+                    target.deleteFile();
+                    juce::FileOutputStream out (target);
+                    juce::PNGImageFormat().writeImageToStream (image, out);
+                    std::printf ("render: %s\n", target.getFullPathName().toRawUTF8());
+                    quit();
+                });
+                return;
+            }
             window = std::make_unique<MainWindow> (*session, *settings);
             if (cl.presentation)
                 if (auto* main = dynamic_cast<MainComponent*> (window->getContentComponent()))
@@ -251,6 +277,7 @@ namespace kickemu
         void shutdown() override
         {
             window.reset();
+            offscreen.reset();
             expectStop = true;
             if (expectThread.joinable())
                 expectThread.join();
@@ -355,6 +382,7 @@ namespace kickemu
         std::unique_ptr<AppSettings> settings;
         std::unique_ptr<Session> session;
         std::unique_ptr<MainWindow> window;
+        std::unique_ptr<MainComponent> offscreen;
 
         CommandLine cl;
         Layout layout;
