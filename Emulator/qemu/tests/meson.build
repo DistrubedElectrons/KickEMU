@@ -6,6 +6,7 @@
 
 kick_qtests = [
   'kick-ad5675r-test',
+  'kick-audio-test',
   'kick-board-test',
   'kick-clock-test',
   'kick-dsim-test',

@@ -37,6 +37,10 @@ qemu-system-aarch64 -M kick,boot-mode=rom,emmc=emmc -accel tcg -cpu cortex-a53 .
 | `soc-uid` | 0 | 64-bit unique ID fused into OCOTP (`/sys/devices/soc0/serial_number`) |
 | `cv-chardev` | none | chardev for the CV/gate converter host protocol |
 | `audiodev` | none | audiodev for SAI2 (generic machine property) |
+| `audio-wav-in` | `""` | WAV file fed to the SAI2 capture path instead of the audiodev input; run-time settable (`qom-set /machine`), see "SAI2 WAV files" |
+| `audio-wav-in-loop` | off | restart `audio-wav-in` at its end (otherwise silence) |
+| `audio-wav-out` | `""` | record the SAI2 playback path; setting it starts a new file, `""` closes and finalises it |
+| `audio-status` | read-only | JSON `{"out_frames","in_frames","wav_in","wav_in_pos","wav_out","wav_out_frames"}` |
 | `panel-width`, `panel-height` | 1024, 600 | LCDIF scan-out size before the guest sets a mode |
 | `sdma-firmware` | none | `sdma-imx7d.bin` of the guest rootfs; its header gives the RAM script entry points (see below) |
 | `power-key-press-ms` | 200 | how long `system_powerdown` holds the SNVS ON/OFF button |
@@ -266,6 +270,34 @@ follows `CINST`; the board inverts it onto GPIO1_IO10, so the pin changes at the
 moment as the register (the 5.4 `sdhci-esdhc-imx` driver uses the GPIO, `cd-gpios`). The
 level is driven again after every system reset. qtest `kick-sd-test`.
 
+## SAI2 WAV files
+
+`docs/host-interface.md` "Audio (SAI2)". The machine properties are forwarded to the SAI2
+object's `wav-in`, `wav-in-loop`, `wav-out` and `status` (`imx8mm_sai.c`). Both files sit on
+data line 0 and are paced by the SAI frame engine on the virtual clock, so they follow guest
+time: the input is read one frame per received frame (nothing is consumed while the receiver
+is off; in the KICK's synchronous mode the receiver also runs during playback), the output
+gets one frame per transmitted frame.
+
+- Input: RIFF/WAVE, PCM 16/24/32 bit or IEEE float 32 bit (also as WAVE_FORMAT_EXTENSIBLE),
+  mono (duplicated) or stereo, 48000 Hz. Other rates, formats or channel counts make the
+  `qom-set` (or `-machine`) fail, and the previous input stays. Samples are left aligned to
+  32 bits and handed to the slot word as the audiodev input would be; float is scaled by
+  2^31 and saturated. After the end: silence, or the file restarts with `audio-wav-in-loop`.
+- Output: PCM 32 bit stereo, 44-byte header, each sample the slot word left aligned to 32
+  bits (the word as written for 32-bit slots, which is what the KICK uses). The header rate is
+  the transmitter's frame rate at the first recorded frame (48000 with the KICK clocking).
+  Sizes are rewritten about once per second of audio, when the file is closed or replaced,
+  and from an exit notifier when QEMU exits (`quit`, SIGTERM; not SIGKILL). Recording stops
+  with a warning before the 4 GiB RIFF limit (about 3 h).
+- `out_frames`/`in_frames` count frames since QEMU started; `wav_in_pos` is the frame index
+  in the input file; `wav_out_frames` the frames in the current recording.
+
+Verified with the vendor kernel and the test image: `arecord -D hw:0,0 -f S32_LE -r 48000 -c
+2 -d 1` with `audio-wav-in` set to a random 32-bit file, then `aplay` of that recording with
+`audio-wav-out` set: the output file contains input frames 0..47999 bit-exact and contiguous.
+qtest `kick-audio-test`.
+
 ## Known gaps
 
 - Clock tree: rates are computed for roots and PLLs; reset values of roots and gates are
@@ -302,4 +334,6 @@ work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test`, `kick-board-
 `kick-uart-test` (UART registers and timing, UART DMA through SDMA1 including inferred
 scripts) and `kick-sd-test` (SD slot insert/eject: PRES_STATE, INT_STATUS, the uSDHC2
 interrupt and the GPIO1_IO10 card detect, including the delayed re-insertion and a card
-present at start-up).
+present at start-up) and `kick-audio-test` (SAI2 WAV recording through qom-set and at exit,
+WAV input 16/24-bit mono/float with saturation, end-of-file silence and looping, pacing,
+rejected files).

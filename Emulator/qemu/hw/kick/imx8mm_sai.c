@@ -31,6 +31,18 @@
  * follow (FRDE && FRF) || (FWDE && FWF). The interrupt line is the OR of
  * the enabled flags of both directions.
  *
+ * WAV files (properties "wav-in", "wav-in-loop", "wav-out", read-only
+ * "status"; the kick machine exposes them as audio-wav-* for SAI2): data
+ * line 0 can read its capture frames from a WAV file instead of the
+ * audiodev and record its playback frames to a WAV file. Both are paced by
+ * the frame engine, so the file follows guest time, not the host clock.
+ * Input: PCM 16/24/32 bit or IEEE float 32 bit, mono (duplicated) or
+ * stereo, 48000 Hz; after the end the receiver gets silence, or the file
+ * restarts with wav-in-loop. Output: PCM 32 bit stereo, each sample the
+ * slot word left aligned to 32 bits (the word itself for 32-bit slots),
+ * at the transmitter's frame rate; the RIFF sizes are rewritten about once
+ * a second of audio, when the file is closed and on QEMU exit.
+ *
  * Not modelled (LOG_UNIMP): FIFO combine (xCR4.FCOMB), FIFO packing
  * (xCR4.FPACK), LSB first or offset bit order (xCR5.FBT != word width - 1),
  * timestamp/bit counter registers, sync error (SEF never set), more than
@@ -49,6 +61,8 @@
 #include "qemu/log.h"
 #include "qemu/module.h"
 #include "qemu/timer.h"
+#include "qobject/json-writer.h"
+#include "system/system.h"
 #include "imx8mm_sai.h"
 
 /* Register offsets */
@@ -402,6 +416,342 @@ static uint32_t sai_s32_to_word(int32_t sample, uint32_t width)
 }
 
 /*
+ * WAV files
+ */
+
+#define WAV_RATE                48000
+#define WAV_HEADER_SIZE         44
+#define WAV_FMT_PCM             1
+#define WAV_FMT_FLOAT           3
+#define WAV_FMT_EXTENSIBLE      0xfffe
+#define WAV_OUT_FRAME_BYTES     8   /* two 32-bit samples */
+/* RIFF sizes are 32 bit: stop recording before the data chunk overflows */
+#define WAV_OUT_MAX_DATA        (UINT32_MAX - WAV_HEADER_SIZE)
+/* Header refresh interval of a recording, in frames (one second) */
+#define WAV_OUT_SYNC_FRAMES     WAV_RATE
+
+static void wav_close(IMX8MMSAIWav *w)
+{
+    if (w->f) {
+        fclose(w->f);
+    }
+    g_free(w->path);
+    memset(w, 0, sizeof(*w));
+}
+
+static void wav_put_le16(uint8_t *p, uint16_t v)
+{
+    p[0] = v;
+    p[1] = v >> 8;
+}
+
+static void wav_put_le32(uint8_t *p, uint32_t v)
+{
+    wav_put_le16(p, v);
+    wav_put_le16(p + 2, v >> 16);
+}
+
+static uint16_t wav_le16(const uint8_t *p)
+{
+    return p[0] | (p[1] << 8);
+}
+
+static uint32_t wav_le32(const uint8_t *p)
+{
+    return wav_le16(p) | ((uint32_t)wav_le16(p + 2) << 16);
+}
+
+/* Write the canonical 44-byte header for the frames recorded so far */
+static bool wav_out_write_header(IMX8MMSAIState *s)
+{
+    IMX8MMSAIWav *w = &s->wav_out;
+    uint32_t data = s->wav_out_frames * WAV_OUT_FRAME_BYTES;
+    uint8_t h[WAV_HEADER_SIZE];
+    long here = ftell(w->f);
+
+    memcpy(h, "RIFF", 4);
+    wav_put_le32(h + 4, 36 + data);
+    memcpy(h + 8, "WAVEfmt ", 8);
+    wav_put_le32(h + 16, 16);
+    wav_put_le16(h + 20, WAV_FMT_PCM);
+    wav_put_le16(h + 22, 2);
+    wav_put_le32(h + 24, w->rate);
+    wav_put_le32(h + 28, w->rate * WAV_OUT_FRAME_BYTES);
+    wav_put_le16(h + 32, WAV_OUT_FRAME_BYTES);
+    wav_put_le16(h + 34, 32);
+    memcpy(h + 36, "data", 4);
+    wav_put_le32(h + 40, data);
+
+    if (fseek(w->f, 0, SEEK_SET) || fwrite(h, sizeof(h), 1, w->f) != 1 ||
+        fseek(w->f, here < WAV_HEADER_SIZE ? WAV_HEADER_SIZE : here,
+              SEEK_SET) || fflush(w->f)) {
+        return false;
+    }
+    return true;
+}
+
+static void wav_out_close(IMX8MMSAIState *s)
+{
+    if (s->wav_out.f && !wav_out_write_header(s)) {
+        error_report("%s: finalising %s: %s", TYPE_IMX8MM_SAI,
+                     s->wav_out.path, strerror(errno));
+    }
+    wav_close(&s->wav_out);
+}
+
+static bool wav_out_open(IMX8MMSAIState *s, const char *path, Error **errp)
+{
+    IMX8MMSAIWav *w = &s->wav_out;
+    IMX8MMSAIDir *tx = &s->dir[IMX8MM_SAI_TX];
+
+    wav_out_close(s);
+    s->wav_out_frames = 0;
+    if (!*path) {
+        return true;
+    }
+    w->f = fopen(path, "wb");
+    if (!w->f) {
+        error_setg_errno(errp, errno, "%s: cannot create '%s'",
+                         TYPE_IMX8MM_SAI, path);
+        return false;
+    }
+    w->path = g_strdup(path);
+    /* The rate is fixed again by the first recorded frame */
+    w->rate = tx->running && tx->rate ? tx->rate : WAV_RATE;
+    if (!wav_out_write_header(s)) {
+        error_setg_errno(errp, errno, "%s: cannot write '%s'",
+                         TYPE_IMX8MM_SAI, path);
+        wav_close(w);
+        return false;
+    }
+    return true;
+}
+
+static void wav_out_frame(IMX8MMSAIState *s, const int32_t out[2])
+{
+    IMX8MMSAIWav *w = &s->wav_out;
+    uint8_t b[WAV_OUT_FRAME_BYTES];
+
+    if (!w->f || w->full) {
+        return;
+    }
+    if ((uint64_t)(s->wav_out_frames + 1) * WAV_OUT_FRAME_BYTES >
+        WAV_OUT_MAX_DATA) {
+        warn_report("%s: %s reached the WAV size limit, recording stopped",
+                    TYPE_IMX8MM_SAI, w->path);
+        w->full = true;
+        return;
+    }
+    if (!s->wav_out_frames) {
+        w->rate = s->dir[IMX8MM_SAI_TX].rate;
+    }
+    wav_put_le32(b, out[0]);
+    wav_put_le32(b + 4, out[1]);
+    if (fwrite(b, sizeof(b), 1, w->f) != 1) {
+        warn_report("%s: writing %s failed, recording stopped",
+                    TYPE_IMX8MM_SAI, w->path);
+        w->full = true;
+        return;
+    }
+    s->wav_out_frames++;
+    /* Keep the file readable while it grows, and after a crash */
+    if (s->wav_out_frames % WAV_OUT_SYNC_FRAMES == 0) {
+        wav_out_write_header(s);
+    }
+}
+
+/* Parse the RIFF/WAVE header and position the file at the first sample */
+static bool wav_in_parse(IMX8MMSAIWav *w, const char *path, Error **errp)
+{
+    uint8_t riff[12], ck[8], fmt[40];
+    bool have_fmt = false;
+    uint16_t tag = 0;
+    uint32_t rate = 0;
+    int64_t flen;
+
+    if (fseek(w->f, 0, SEEK_END) || (flen = ftell(w->f)) < 0 ||
+        fseek(w->f, 0, SEEK_SET) ||
+        fread(riff, sizeof(riff), 1, w->f) != 1 ||
+        memcmp(riff, "RIFF", 4) || memcmp(riff + 8, "WAVE", 4)) {
+        error_setg(errp, "%s: '%s' is not a RIFF/WAVE file", TYPE_IMX8MM_SAI,
+                   path);
+        return false;
+    }
+    for (;;) {
+        uint32_t len;
+        int64_t at;
+
+        if (fread(ck, sizeof(ck), 1, w->f) != 1) {
+            error_setg(errp, "%s: '%s' has no data chunk", TYPE_IMX8MM_SAI,
+                       path);
+            return false;
+        }
+        len = wav_le32(ck + 4);
+        at = ftell(w->f);
+        if (!memcmp(ck, "fmt ", 4)) {
+            if (len < 16 || fread(fmt, MIN(len, sizeof(fmt)), 1, w->f) != 1) {
+                error_setg(errp, "%s: '%s' has a short fmt chunk",
+                           TYPE_IMX8MM_SAI, path);
+                return false;
+            }
+            tag = wav_le16(fmt);
+            w->channels = wav_le16(fmt + 2);
+            rate = wav_le32(fmt + 4);
+            w->block_align = wav_le16(fmt + 12);
+            w->bits = wav_le16(fmt + 14);
+            if (tag == WAV_FMT_EXTENSIBLE) {
+                if (len < 40) {
+                    error_setg(errp, "%s: '%s' has a short extensible fmt "
+                               "chunk", TYPE_IMX8MM_SAI, path);
+                    return false;
+                }
+                /* the sub-format GUID starts with the format tag */
+                tag = wav_le16(fmt + 24);
+            }
+            have_fmt = true;
+        } else if (!memcmp(ck, "data", 4)) {
+            break;
+        }
+        /* chunks are padded to an even length */
+        if (fseek(w->f, at + len + (len & 1), SEEK_SET)) {
+            error_setg(errp, "%s: '%s' is truncated", TYPE_IMX8MM_SAI, path);
+            return false;
+        }
+    }
+    if (!have_fmt) {
+        error_setg(errp, "%s: '%s' has no fmt chunk before its data",
+                   TYPE_IMX8MM_SAI, path);
+        return false;
+    }
+    if (rate != WAV_RATE) {
+        error_setg(errp, "%s: '%s' is sampled at %u Hz, the SAI runs at "
+                   "%u Hz", TYPE_IMX8MM_SAI, path, rate, WAV_RATE);
+        return false;
+    }
+    if (w->channels != 1 && w->channels != 2) {
+        error_setg(errp, "%s: '%s' has %u channels, 1 or 2 are supported",
+                   TYPE_IMX8MM_SAI, path, w->channels);
+        return false;
+    }
+    w->is_float = tag == WAV_FMT_FLOAT;
+    if (!((tag == WAV_FMT_PCM &&
+           (w->bits == 16 || w->bits == 24 || w->bits == 32)) ||
+          (w->is_float && w->bits == 32)) ||
+        w->block_align != w->channels * w->bits / 8) {
+        error_setg(errp, "%s: '%s': format %u with %u bits is not supported "
+                   "(PCM 16/24/32 bit or float 32 bit)", TYPE_IMX8MM_SAI,
+                   path, tag, w->bits);
+        return false;
+    }
+    w->data_off = ftell(w->f);
+    /* Streamed files carry 0 or 0xffffffff: the data runs to the file end */
+    w->frames = MIN((uint64_t)wav_le32(ck + 4), flen - w->data_off) /
+                w->block_align;
+    if (wav_le32(ck + 4) == 0 || wav_le32(ck + 4) == UINT32_MAX) {
+        w->frames = (flen - w->data_off) / w->block_align;
+    }
+    return true;
+}
+
+static bool wav_in_open(IMX8MMSAIState *s, const char *path, Error **errp)
+{
+    IMX8MMSAIWav w = { 0 };
+
+    if (!*path) {
+        wav_close(&s->wav_in);
+        return true;
+    }
+    w.f = fopen(path, "rb");
+    if (!w.f) {
+        error_setg_errno(errp, errno, "%s: cannot open '%s'", TYPE_IMX8MM_SAI,
+                         path);
+        return false;
+    }
+    if (!wav_in_parse(&w, path, errp)) {
+        fclose(w.f);
+        return false;
+    }
+    /* Only a valid file replaces the current input */
+    wav_close(&s->wav_in);
+    w.path = g_strdup(path);
+    s->wav_in = w;
+    return true;
+}
+
+static int32_t wav_sample_to_s32(const IMX8MMSAIWav *w, const uint8_t *p)
+{
+    switch (w->bits) {
+    case 16:
+        return (int32_t)((uint32_t)wav_le16(p) << 16);
+    case 24:
+        return (int32_t)(((uint32_t)p[0] << 8) | ((uint32_t)p[1] << 16) |
+                         ((uint32_t)p[2] << 24));
+    default:
+        if (w->is_float) {
+            uint32_t bits = wav_le32(p);
+            float f;
+            double d;
+
+            memcpy(&f, &bits, sizeof(f));
+            /* Saturate in double: INT32_MAX is not representable in float */
+            d = (double)f * 2147483648.0;
+            if (!(d > INT32_MIN)) {     /* also maps NaN to the minimum */
+                return d != d ? 0 : INT32_MIN;
+            }
+            return d >= (double)INT32_MAX ? INT32_MAX : (int32_t)d;
+        }
+        return (int32_t)wav_le32(p);
+    }
+}
+
+/* Next capture frame from the WAV input; silence after its end */
+static void wav_in_frame(IMX8MMSAIState *s, int32_t in[2])
+{
+    IMX8MMSAIWav *w = &s->wav_in;
+    uint8_t b[8];
+
+    in[0] = in[1] = 0;
+    if (w->pos >= w->frames) {
+        if (!s->wav_in_loop || !w->frames ||
+            fseek(w->f, w->data_off, SEEK_SET)) {
+            return;
+        }
+        w->pos = 0;
+    }
+    if (fread(b, w->block_align, 1, w->f) != 1) {
+        /* the file shrank under us: treat as its end */
+        w->frames = w->pos;
+        return;
+    }
+    w->pos++;
+    in[0] = wav_sample_to_s32(w, b);
+    in[1] = w->channels == 2 ? wav_sample_to_s32(w, b + w->bits / 8) : in[0];
+}
+
+static char *sai_status_json(IMX8MMSAIState *s)
+{
+    g_autoptr(JSONWriter) jw = json_writer_new(false);
+
+    json_writer_start_object(jw, NULL);
+    json_writer_uint64(jw, "out_frames", s->out_frames);
+    json_writer_uint64(jw, "in_frames", s->in_frames);
+    json_writer_str(jw, "wav_in", s->wav_in.path ?: "");
+    json_writer_uint64(jw, "wav_in_pos", s->wav_in.pos);
+    json_writer_str(jw, "wav_out", s->wav_out.path ?: "");
+    json_writer_uint64(jw, "wav_out_frames", s->wav_out_frames);
+    json_writer_end_object(jw);
+    return g_strdup(json_writer_get(jw));
+}
+
+/* Recordings get a valid header however QEMU exits (quit, SIGTERM) */
+static void sai_exit_notify(Notifier *n, void *data)
+{
+    IMX8MMSAIState *s = container_of(n, IMX8MMSAIState, exit_notifier);
+
+    wav_out_close(s);
+}
+
+/*
  * Shift out one transmit frame. Returns false without consuming anything
  * when an unmasked word finds the data line 0 FIFO empty while the DMA is
  * asked for data, so the caller can let the DMA catch up first.
@@ -459,6 +809,8 @@ static bool sai_tx_frame(IMX8MMSAIState *s, bool allow_underrun)
     if (words == 1) {
         out[1] = out[0];
     }
+    s->out_frames++;
+    wav_out_frame(s, out);
 
     /* Data line 0 to the host ring; drop the oldest frame when full */
     if (x->ring) {
@@ -500,7 +852,10 @@ static bool sai_rx_frame(IMX8MMSAIState *s, bool allow_overflow)
         }
     }
 
-    if (x->ring && x->ring_fill) {
+    if (s->wav_in.f) {
+        /* The WAV input replaces the audiodev's captured frames */
+        wav_in_frame(s, in);
+    } else if (x->ring && x->ring_fill) {
         in[0] = x->ring[x->ring_rd * 2];
         in[1] = x->ring[x->ring_rd * 2 + 1];
         x->ring_rd = (x->ring_rd + 1) % x->ring_frames;
@@ -530,6 +885,7 @@ static bool sai_rx_frame(IMX8MMSAIState *s, bool allow_overflow)
             }
         }
     }
+    s->in_frames++;
     return true;
 }
 
@@ -878,6 +1234,54 @@ static void sai_realize(DeviceState *dev, Error **errp)
         return;
     }
     s->tick = timer_new_ns(QEMU_CLOCK_VIRTUAL, sai_tick, s);
+    s->exit_notifier.notify = sai_exit_notify;
+    qemu_add_exit_notifier(&s->exit_notifier);
+}
+
+static char *sai_get_wav_in(Object *obj, Error **errp)
+{
+    return g_strdup(IMX8MM_SAI(obj)->wav_in.path ?: "");
+}
+
+static void sai_set_wav_in(Object *obj, const char *v, Error **errp)
+{
+    wav_in_open(IMX8MM_SAI(obj), v, errp);
+}
+
+static char *sai_get_wav_out(Object *obj, Error **errp)
+{
+    return g_strdup(IMX8MM_SAI(obj)->wav_out.path ?: "");
+}
+
+static void sai_set_wav_out(Object *obj, const char *v, Error **errp)
+{
+    wav_out_open(IMX8MM_SAI(obj), v, errp);
+}
+
+static bool sai_get_wav_in_loop(Object *obj, Error **errp)
+{
+    return IMX8MM_SAI(obj)->wav_in_loop;
+}
+
+static void sai_set_wav_in_loop(Object *obj, bool v, Error **errp)
+{
+    IMX8MM_SAI(obj)->wav_in_loop = v;
+}
+
+static char *sai_get_status(Object *obj, Error **errp)
+{
+    return sai_status_json(IMX8MM_SAI(obj));
+}
+
+static void sai_finalize(Object *obj)
+{
+    IMX8MMSAIState *s = IMX8MM_SAI(obj);
+
+    if (s->exit_notifier.notify) {
+        qemu_remove_exit_notifier(&s->exit_notifier);
+    }
+    wav_out_close(s);
+    wav_close(&s->wav_in);
 }
 
 static void sai_init(Object *obj)
@@ -975,6 +1379,24 @@ static void sai_class_init(ObjectClass *klass, const void *data)
     device_class_set_legacy_reset(dc, sai_reset);
     device_class_set_props(dc, sai_properties);
     set_bit(DEVICE_CATEGORY_SOUND, dc->categories);
+
+    /* Not qdev properties: they stay settable while the machine runs */
+    object_class_property_add_str(klass, "wav-in", sai_get_wav_in,
+                                  sai_set_wav_in);
+    object_class_property_set_description(klass, "wav-in",
+        "WAV file fed to the capture path of data line 0 (\"\" = off)");
+    object_class_property_add_bool(klass, "wav-in-loop", sai_get_wav_in_loop,
+                                   sai_set_wav_in_loop);
+    object_class_property_set_description(klass, "wav-in-loop",
+        "Restart the WAV input at its end instead of silence");
+    object_class_property_add_str(klass, "wav-out", sai_get_wav_out,
+                                  sai_set_wav_out);
+    object_class_property_set_description(klass, "wav-out",
+        "Record the playback path of data line 0 to this WAV file "
+        "(\"\" = close)");
+    object_class_property_add_str(klass, "status", sai_get_status, NULL);
+    object_class_property_set_description(klass, "status",
+        "JSON: frame counters and WAV file state");
 }
 
 static const TypeInfo sai_info = {
@@ -982,6 +1404,7 @@ static const TypeInfo sai_info = {
     .parent        = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(IMX8MMSAIState),
     .instance_init = sai_init,
+    .instance_finalize = sai_finalize,
     .class_init    = sai_class_init,
 };
 

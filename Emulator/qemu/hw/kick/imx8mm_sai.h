@@ -9,6 +9,7 @@
 
 #include "hw/core/sysbus.h"
 #include "qemu/audio.h"
+#include "qemu/notify.h"
 #include "qom/object.h"
 
 #define TYPE_IMX8MM_SAI "imx8mm-sai"
@@ -57,6 +58,26 @@ typedef struct IMX8MMSAIDir {
     bool fmt_logged;
 } IMX8MMSAIDir;
 
+/*
+ * WAV file attached to data line 0: capture input (replaces the audiodev
+ * input) or playback recording. See imx8mm_sai.c "WAV files".
+ */
+typedef struct IMX8MMSAIWav {
+    char *path;                 /* NULL when off */
+    FILE *f;
+    /* input */
+    uint64_t data_off;          /* first sample byte */
+    uint64_t frames;            /* frames in the data chunk */
+    uint64_t pos;               /* next frame to read */
+    uint16_t channels;
+    uint16_t bits;
+    uint16_t block_align;
+    bool is_float;
+    /* output */
+    uint32_t rate;              /* header sample rate */
+    bool full;                  /* reached the 4 GiB RIFF limit */
+} IMX8MMSAIWav;
+
 struct IMX8MMSAIState {
     SysBusDevice parent_obj;
 
@@ -83,6 +104,15 @@ struct IMX8MMSAIState {
     uint32_t mctl;
     uint32_t mdiv;
     bool dma_level[2];
+
+    /* WAV files on data line 0 and frame counters since start-up */
+    IMX8MMSAIWav wav_in;
+    IMX8MMSAIWav wav_out;
+    bool wav_in_loop;
+    uint64_t out_frames;        /* frames shifted out by the transmitter */
+    uint64_t in_frames;         /* frames shifted in by the receiver */
+    uint64_t wav_out_frames;    /* frames in the current recording */
+    Notifier exit_notifier;
 };
 
 #endif

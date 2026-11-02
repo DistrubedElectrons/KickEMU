@@ -89,6 +89,10 @@ struct KickMachineState {
     bool gt911_reset_wired;
     bool sdma_infer_scripts;
     char *rom_boot_device;
+    /* SAI2 WAV files given before the SoC exists, see kick_board_setup_sai2 */
+    char *audio_wav_in;
+    char *audio_wav_out;
+    bool audio_wav_in_loop;
 };
 
 /* Optional board device models, see kick-board.h */
@@ -167,15 +171,127 @@ static void kick_board_wire_cv(KickMachineState *s)
     i2c_slave_realize_and_unref(dev, kick_i2c_bus(s, 4), &error_fatal);
 }
 
-/* SAI2 to the V4220M codec: playback/capture through a QEMU audiodev */
+/*
+ * SAI2 to the V4220M codec: playback/capture through a QEMU audiodev, and
+ * the WAV input/recording of docs/host-interface.md ("Audio (SAI2)"). The
+ * machine's audio-wav-* properties are the SAI2 ones: values given with
+ * -machine are stored until the SoC exists, later ones go straight to it.
+ */
+static Object *kick_sai2(KickMachineState *s)
+{
+    DeviceState *sai2 = fsl_imx8mm_get_optional(&s->soc, "sai2");
+
+    return sai2 && object_property_find(OBJECT(sai2), "wav-in") ?
+           OBJECT(sai2) : NULL;
+}
+
 static void kick_board_setup_sai2(KickMachineState *s)
 {
     DeviceState *sai2 = fsl_imx8mm_get_optional(&s->soc, "sai2");
     const char *audiodev = MACHINE(s)->audiodev;
+    Object *sai = kick_sai2(s);
 
     if (sai2 && audiodev && object_property_find(OBJECT(sai2), "audiodev")) {
         qdev_prop_set_string(sai2, "audiodev", audiodev);
     }
+    if (!sai) {
+        if (s->audio_wav_in || s->audio_wav_out) {
+            error_report("kick: audio-wav-* need the SAI model");
+            exit(1);
+        }
+        return;
+    }
+    object_property_set_bool(sai, "wav-in-loop", s->audio_wav_in_loop,
+                             &error_fatal);
+    if (s->audio_wav_in) {
+        object_property_set_str(sai, "wav-in", s->audio_wav_in, &error_fatal);
+    }
+    if (s->audio_wav_out) {
+        object_property_set_str(sai, "wav-out", s->audio_wav_out,
+                                &error_fatal);
+    }
+}
+
+static char *kick_get_audio_wav(KickMachineState *s, const char *prop,
+                                const char *stored, Error **errp)
+{
+    Object *sai = kick_sai2(s);
+
+    return sai ? object_property_get_str(sai, prop, errp)
+               : g_strdup(stored ?: "");
+}
+
+static void kick_set_audio_wav(KickMachineState *s, const char *prop,
+                               char **stored, const char *v, Error **errp)
+{
+    Object *sai = kick_sai2(s);
+
+    if (sai) {
+        object_property_set_str(sai, prop, v, errp);
+        return;
+    }
+    g_free(*stored);
+    *stored = g_strdup(v);
+}
+
+static char *kick_get_audio_wav_in(Object *obj, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+
+    return kick_get_audio_wav(s, "wav-in", s->audio_wav_in, errp);
+}
+
+static void kick_set_audio_wav_in(Object *obj, const char *v, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+
+    kick_set_audio_wav(s, "wav-in", &s->audio_wav_in, v, errp);
+}
+
+static char *kick_get_audio_wav_out(Object *obj, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+
+    return kick_get_audio_wav(s, "wav-out", s->audio_wav_out, errp);
+}
+
+static void kick_set_audio_wav_out(Object *obj, const char *v, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+
+    kick_set_audio_wav(s, "wav-out", &s->audio_wav_out, v, errp);
+}
+
+static bool kick_get_audio_wav_in_loop(Object *obj, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+    Object *sai = kick_sai2(s);
+
+    return sai ? object_property_get_bool(sai, "wav-in-loop", errp)
+               : s->audio_wav_in_loop;
+}
+
+static void kick_set_audio_wav_in_loop(Object *obj, bool v, Error **errp)
+{
+    KickMachineState *s = KICK_MACHINE(obj);
+    Object *sai = kick_sai2(s);
+
+    if (sai) {
+        object_property_set_bool(sai, "wav-in-loop", v, errp);
+    } else {
+        s->audio_wav_in_loop = v;
+    }
+}
+
+static char *kick_get_audio_status(Object *obj, Error **errp)
+{
+    Object *sai = kick_sai2(KICK_MACHINE(obj));
+
+    if (!sai) {
+        error_setg(errp, "kick: the SAI model is not built in");
+        return NULL;
+    }
+    return object_property_get_str(sai, "status", errp);
 }
 
 /*
@@ -609,6 +725,8 @@ static void kick_finalize(Object *obj)
     g_free(s->cv_chardev);
     g_free(s->sdma_firmware);
     g_free(s->rom_boot_device);
+    g_free(s->audio_wav_in);
+    g_free(s->audio_wav_out);
 }
 
 static void kick_class_init(ObjectClass *oc, const void *data)
@@ -688,6 +806,26 @@ static void kick_class_init(ObjectClass *oc, const void *data)
         "Connect GPIO5_IO03 to the GT911 RSTB input");
     /* "audiodev" (the generic machine property) feeds SAI2 */
     machine_add_audiodev_property(mc);
+    object_class_property_add_str(oc, "audio-wav-in", kick_get_audio_wav_in,
+                                  kick_set_audio_wav_in);
+    object_class_property_set_description(oc, "audio-wav-in",
+        "WAV file fed to the SAI2 capture path, \"\" = off "
+        "(48 kHz, PCM 16/24/32 or float 32, mono or stereo)");
+    object_class_property_add_bool(oc, "audio-wav-in-loop",
+                                   kick_get_audio_wav_in_loop,
+                                   kick_set_audio_wav_in_loop);
+    object_class_property_set_description(oc, "audio-wav-in-loop",
+        "Restart audio-wav-in at its end (default: silence after the end)");
+    object_class_property_add_str(oc, "audio-wav-out", kick_get_audio_wav_out,
+                                  kick_set_audio_wav_out);
+    object_class_property_set_description(oc, "audio-wav-out",
+        "Record the SAI2 playback path to this WAV file (PCM 32 bit "
+        "stereo); \"\" closes and finalises it");
+    object_class_property_add_str(oc, "audio-status", kick_get_audio_status,
+                                  NULL);
+    object_class_property_set_description(oc, "audio-status",
+        "JSON: out_frames, in_frames, wav_in, wav_in_pos, wav_out, "
+        "wav_out_frames");
     object_class_property_add_str(oc, "rom-boot-device",
                                   kick_get_rom_boot_device,
                                   kick_set_rom_boot_device);
