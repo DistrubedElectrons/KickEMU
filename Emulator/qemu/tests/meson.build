@@ -16,6 +16,7 @@ kick_qtests = [
   'kick-ocotp-test',
   'kick-pca9534-test',
   'kick-pcf85263-test',
+  'kick-pwm-test',
   'kick-sai-test',
   'kick-sd-test',
   'kick-sdma-test',

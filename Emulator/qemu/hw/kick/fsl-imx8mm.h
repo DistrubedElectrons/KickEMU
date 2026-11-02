@@ -42,6 +42,7 @@
 #include "imx8mm_snvs.h"
 #include "imx8mm_src.h"
 #include "imx8mm_sysctr.h"
+#include "imx8mm_pwm.h"
 #include "imx8mm_tmu.h"
 #include "imx8mm_uart.h"
 #include "imx8mm_usb.h"
@@ -308,6 +309,7 @@ struct FslImx8mmState {
     IMX8MMSysCtrState   sysctr;
     IMX8MMDDRCState     ddrc;
     IMX8MMApbhDmaState  apbh_dma;
+    IMX8MMPWMState      pwm[4];
 
     IMXGPTState         gpt[FSL_IMX8MM_NUM_GPTS];
     OrIRQState          gpt5_gpt6_irq;

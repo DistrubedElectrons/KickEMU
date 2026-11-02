@@ -212,6 +212,10 @@ static void fsl_imx8mm_init(Object *obj)
     object_initialize_child(obj, "ddrc", &s->ddrc, TYPE_IMX8MM_DDRC);
     object_initialize_child(obj, "apbh-dma", &s->apbh_dma,
                             TYPE_IMX8MM_APBH_DMA);
+    for (int i = 0; i < ARRAY_SIZE(s->pwm); i++) {
+        g_autofree char *name = g_strdup_printf("pwm%d", i + 1);
+        object_initialize_child(obj, name, &s->pwm[i], TYPE_IMX8MM_PWM);
+    }
 
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         g_autofree char *name = g_strdup_printf("uart%d", i + 1);
@@ -444,6 +448,14 @@ static bool fsl_imx8mm_realize_system(FslImx8mmState *s, Error **errp)
     }
     sysbus_connect_irq(SYS_BUS_DEVICE(&s->snvs), 1,
                        fsl_imx8mm_irq(s, FSL_IMX8MM_SNVS_PWRKEY_IRQ));
+
+    /* PWM1..4: PWM1 is the panel backlight on the KICK (pwm-backlight) */
+    for (int i = 0; i < ARRAY_SIZE(s->pwm); i++) {
+        if (!fsl_imx8mm_sysbus(s, &s->pwm[i], MMAP(PWM1) + i * 0x10000,
+                               FSL_IMX8MM_PWM1_IRQ + i, errp)) {
+            return false;
+        }
+    }
 
     /* APBH DMA: registers for the mxs-dma probe, no channel ever runs */
     if (!fsl_imx8mm_sysbus(s, &s->apbh_dma, MMAP(APBH_DMA), -1, errp)) {

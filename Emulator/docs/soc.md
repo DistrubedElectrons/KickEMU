@@ -82,7 +82,7 @@ the KICK) and at EL1 under HVF; `boot-mode=rom` starts SPL at EL3.
 | 0x3039_0000 | 64 KiB | SRC | `imx8mm.src` |
 | 0x303a_0000 | 64 KiB | GPC | `imx8mm.gpc` |
 | 0x303b_0000 .. 0x303e_0000 | | SEMA1, SEMA2, RDC, CSU | unimplemented |
-| 0x3066_0000 | 4 x 64 KiB | PWM1..PWM4 | unimplemented |
+| 0x3066_0000 | 4 x 64 KiB | PWM1..PWM4 | `imx8mm.pwm`: registers of the i.MX27-style PWM, no output timing; `duty-permille` (QOM, read-only) is the duty the host dims the panel with (PWM1 = pwm-backlight) |
 | 0x306a_0000 | 3 x 64 KiB | System counter read / compare / control frames | `imx8mm.sysctr` |
 | 0x306e_0000 / 0x306f_0000 / 0x3070_0000 | | GPT6 / GPT5 / GPT4 | `imx7.gpt` |
 | 0x3082_0000 | 3 x 64 KiB | ECSPI1..ECSPI3 | `imx.spi` (upstream) |
@@ -357,7 +357,7 @@ device. qtest `kick-usb-test`.
   `boot-mode=rom` the real ATF provides them.
 - APBH DMA: only the registers and the MXS module reset (`mxs-dma 33000000.dma-controller:
   initialized` under the vendor kernel); no DMA channel runs (GPMI/NAND is unused).
-- CAAM (job rings fail), PWM,
+- CAAM (job rings fail),
   PCIe, VPU, CSI, MU, FlexSPI, ANA_OSC, DDR block control: unimplemented-device only.
 - SNVS security monitor and HP periodic interrupt not modelled; the long press only powers
   off (no power-on from the off state, QEMU exits).
@@ -378,7 +378,9 @@ device. qtest `kick-usb-test`.
 
 ## Tests
 
-`meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'`; the SoC
+`meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'` (use
+`Emulator/out/qemu-build/pyvenv/bin/meson` if the system meson is older); `kick-pwm-test`
+runs the pwm-imx27 register sequence and checks the backlight duty, polarity and reset; the SoC
 work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test`, `kick-board-test`,
 `kick-uart-test` (UART registers and timing, UART DMA through SDMA1 including inferred
 scripts) and `kick-sd-test` (SD slot insert/eject: PRES_STATE, INT_STATUS, the uSDHC2
