@@ -47,7 +47,7 @@ jobs:
         run: Emulator/qemu/build.sh
 
       - name: kick qtests
-        run: meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
+        run: Emulator/out/qemu-build/pyvenv/bin/meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
 
       - name: KickEmu host and unit tests
         run: |
@@ -100,7 +100,7 @@ jobs:
         run: Emulator/qemu/build.sh
 
       - name: kick qtests
-        run: meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
+        run: Emulator/out/qemu-build/pyvenv/bin/meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*' --print-errorlogs
 
       - name: KickEmu host and unit tests
         run: |
