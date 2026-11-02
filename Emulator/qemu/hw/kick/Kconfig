@@ -40,6 +40,7 @@ config KICK
     bool
     default y
     depends on AARCH64
+    select AT24C
     select FSL_IMX8MM
     select KICK_AD5675R
     select KICK_GOODIX_GT911

@@ -366,8 +366,10 @@ device. qtest `kick-usb-test`.
 - DDR: training is not simulated (always passes); the scrubber does not write the pattern.
 - BootROM: no DCD, HAB, plugin, USB serial download, FlexSPI/NAND, or ROM API; frequencies in
   the ROM boot info are 0.
-- U-Boot proper (DART config) finds no SOM EEPROM (I2C1 0x52 is not modelled) and reports
-  512 MiB DRAM; it expects its PHY at MDIO address 0.
+- SOM EEPROM (I2C1 0x52, AT24C, 256 bytes): Variscite header version 1 with the machine's DRAM
+  size, the fused MAC and placeholder product strings (checked from Linux with i2cdump; U-Boot
+  reading it is not verified in this tree). Version 1 has no DDR adjustment tables. U-Boot
+  proper expects its PHY at MDIO address 0.
 - SDMA RAM scripts: the model runs script semantics, not the SDMA ISA. With the RAM firmware
   (the KICK rootfs ships `firmware-imx`) the 5.4 driver takes every entry point from the
   firmware header, and `uart_2_mcu` has no ROM entry in that kernel. Script inference

@@ -36,6 +36,7 @@
 #include "pca9534.h"
 #include "sn65dsi83.h"
 #include "hw/i2c/i2c.h"
+#include "hw/nvram/eeprom_at24c.h"
 #include "hw/sd/sd.h"
 #include "net/net.h"
 #include "system/block-backend.h"
@@ -148,6 +149,37 @@ static void kick_board_wire_pcf85263(KickMachineState *s)
         i2c_slave_create_simple(kick_i2c_bus(s, 3), KICK_TYPE_PCF85263,
                                 KICK_PCF85263_I2C_ADDR);
     }
+}
+
+/*
+ * Variscite SOM EEPROM on I2C1 at 0x52, read by U-Boot (SPL and proper) for the
+ * DRAM size, the MAC and the product strings. Layout of struct var_eeprom in
+ * varigit/uboot-imx board/variscite/common/imx8_eeprom.h. Version 1: the DRAM
+ * size is in GiB and SPL applies no DDR adjustment tables (training is not
+ * simulated anyway).
+ */
+#define KICK_SOM_EEPROM_ADDR    0x52
+#define KICK_SOM_EEPROM_SIZE    256
+
+static void kick_board_wire_som_eeprom(KickMachineState *s, uint64_t ram_size)
+{
+    uint8_t rom[KICK_SOM_EEPROM_SIZE];
+
+    memset(rom, 0xff, sizeof(rom));
+    rom[0x00] = '8';                     /* magic 0x384d, read big-endian */
+    rom[0x01] = 'M';
+    memcpy(&rom[0x02], "DT8", 3);        /* part number */
+    memcpy(&rom[0x05], "KICKEMU001", 10);/* assembly */
+    memcpy(&rom[0x0f], "2026NOV02", 9);  /* build date */
+    memcpy(&rom[0x18], s->soc.enet.conf.macaddr.a, 6);
+    rom[0x1e] = 0x01;                    /* SOM revision 1.1 */
+    rom[0x1f] = 1;                       /* EEPROM version 1 */
+    rom[0x20] = (1 << 1) | (1 << 2) | (1 << 3);   /* ETH, AUDIO, LVDS */
+    rom[0x21] = MAX(1, ram_size >> 30);  /* DRAM size in GiB */
+    memset(&rom[0x22], 0, 8 + 5 + 3);    /* no DRAM tables, partnum2, reserved */
+
+    at24c_eeprom_init_rom(kick_i2c_bus(s, 1), KICK_SOM_EEPROM_ADDR,
+                          KICK_SOM_EEPROM_SIZE, rom, sizeof(rom));
 }
 
 /* CV/gate converter on I2C4 at 0x0c, host side on the "cv-chardev" socket */
@@ -543,6 +575,7 @@ static void kick_init(MachineState *machine)
     kick_board_wire_gt911(s);
     kick_board_wire_pcf85263(s);
     kick_board_wire_cv(s);
+    kick_board_wire_som_eeprom(s, machine->ram_size);
 
     kick_board_attach_card(s, 3, s->emmc, TYPE_EMMC);
     kick_board_attach_card(s, 2, s->sd, TYPE_SD_CARD);
