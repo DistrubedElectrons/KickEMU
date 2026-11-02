@@ -6,6 +6,16 @@ namespace kickemu
 {
     namespace
     {
+        /** A sample count or index from a time computation, clamped before the integer cast:
+            a ring that never received data reports an enormous age, and the overflowed int
+            once sized a vector negative (length_error, the app terminated). */
+        int clampedCount (double value, int lo, int hi)
+        {
+            if (! std::isfinite (value))
+                return value > 0 ? hi : lo;
+            return (int) juce::jlimit ((double) lo, (double) juce::jmax (lo, hi), value);
+        }
+
         constexpr int hDivs = 10, vDivs = 8;
         const double timebases[] = { 50e-6, 100e-6, 200e-6, 500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3, 50e-3, 100e-3, 200e-3, 500e-3, 1.0 };
         const double audioScales[] = { 1.0, 0.5, 0.25, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005, 0.001 };
@@ -198,7 +208,7 @@ namespace kickemu
         // leaves half a screen on either side.
         auto& ring = hub.ringFor (src[tc]);
         const double rate = ring.getSampleRate();
-        const int nScreen = juce::jmax (2, (int) std::ceil (screenSec * rate));
+        const int nScreen = clampedCount (std::ceil (screenSec * rate), 2, ring.getCapacity());
         const int nRead = juce::jmin (ring.getCapacity(), 2 * nScreen + 4);
         std::vector<float> buf ((size_t) nRead);
         juce::int64 end = 0;
@@ -243,8 +253,8 @@ namespace kickemu
             t.samplesPerDiv = settings.secPerDiv * r;
             t.leftPos = centrePos - hDivs * t.samplesPerDiv / 2.0;
             t.stale = age > 1000.0;
-            const int from = juce::jlimit (0, (int) t.samples.size(), (int) std::floor (t.leftPos));
-            const int to = juce::jlimit (from, (int) t.samples.size(), (int) std::ceil (t.leftPos + hDivs * t.samplesPerDiv));
+            const int from = clampedCount (std::floor (t.leftPos), 0, (int) t.samples.size());
+            const int to = clampedCount (std::ceil (t.leftPos + hDivs * t.samplesPerDiv), from, (int) t.samples.size());
             t.m = signal::measure (t.samples.data() + from, to - from, r);
         };
 
@@ -272,8 +282,8 @@ namespace kickemu
             const double oage = oring.msSinceLastWrite();
             const double centreAgoSec = centreFromEnd / rate + ageMs * 0.001;
             const double fromEnd = juce::jmax (0.0, (centreAgoSec - oage * 0.001) * orate);
-            const int oScreen = juce::jmax (2, (int) std::ceil (screenSec * orate));
-            const int oRead = juce::jmin (oring.getCapacity(), (int) std::ceil (fromEnd + oScreen / 2.0) + 4);
+            const int oScreen = clampedCount (std::ceil (screenSec * orate), 2, oring.getCapacity());
+            const int oRead = clampedCount (std::ceil (fromEnd + oScreen / 2.0) + 4.0, 0, oring.getCapacity());
             std::vector<float> other ((size_t) oRead);
             juce::int64 used = 0;
             const int got = oring.read (src[oc].channel, oRead, other.data(), -1, used);
@@ -359,8 +369,8 @@ namespace kickemu
         auto xOf = [&] (double k) { return (float) (r.getX() + (k - t.leftPos) * pxPerSample); };
 
         const int n = (int) t.samples.size();
-        const int first = juce::jlimit (0, n - 1, (int) std::floor (t.leftPos));
-        const int last = juce::jlimit (0, n - 1, (int) std::ceil (t.leftPos + screenSamples));
+        const int first = clampedCount (std::floor (t.leftPos), 0, n - 1);
+        const int last = clampedCount (std::ceil (t.leftPos + screenSamples), 0, n - 1);
         juce::Path p;
         if (pxPerSample >= 0.5)
         {
@@ -377,8 +387,8 @@ namespace kickemu
             bool started = false;
             for (int col = 0; col < columns; ++col)
             {
-                const int a = juce::jlimit (first, last, (int) std::floor (t.leftPos + col / pxPerSample));
-                const int b = juce::jlimit (a, last, (int) std::floor (t.leftPos + (col + 1) / pxPerSample));
+                const int a = clampedCount (std::floor (t.leftPos + col / pxPerSample), first, last);
+                const int b = clampedCount (std::floor (t.leftPos + (col + 1) / pxPerSample), a, last);
                 float lo = t.samples[(size_t) a], hi = lo;
                 for (int k = a + 1; k <= b; ++k)
                 {

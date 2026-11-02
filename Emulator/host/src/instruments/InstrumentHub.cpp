@@ -199,7 +199,7 @@ namespace kickemu
         if (! findSource (sourceId, s))
             return false;
         auto& ring = ringFor (s);
-        const int n = juce::jlimit (1, ring.getCapacity(), (int) std::ceil (durationSec * ring.getSampleRate()));
+        const int n = (int) juce::jlimit (1.0, (double) ring.getCapacity(), std::ceil (durationSec * ring.getSampleRate()));
         out.samples.resize ((size_t) n);
         const int got = ring.read (s.channel, n, out.samples.data(), -1, out.endFrame);
         out.samples.resize ((size_t) got);
