@@ -8,6 +8,7 @@
 #include "app/AutomationTools.h"
 #include "automation/AutomationSocket.h"
 #include "automation/McpServer.h"
+#include "emu/NetworkConfig.h"
 #include "app/CommandLine.h"
 #include "app/MainComponent.h"
 #include "app/Session.h"
@@ -151,6 +152,10 @@ namespace kickemu
             }
 
             settings = std::make_unique<AppSettings>();
+            // The network chosen on the LINK port, unless the command line sets one.
+            if (auto net = settings->getString ("network"); net.isNotEmpty() && ! cl.headless
+                && ! cl.overrides.joinIntoString (" ").contains ("qemu.net"))
+                NetworkConfig::fromVar (juce::JSON::parse (net), NetworkConfig::fromConfig (*config)).toConfig (*config);
             // The audio backend picked on the panel's audio jacks, unless set on the command line.
             if (auto dev = settings->getString ("audiodev"); dev.isNotEmpty() && ! cl.headless
                 && ! cl.overrides.joinIntoString (" ").contains ("qemu.audiodev"))

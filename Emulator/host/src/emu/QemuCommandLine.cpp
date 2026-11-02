@@ -1,4 +1,5 @@
 #include "emu/QemuCommandLine.h"
+#include "emu/NetworkConfig.h"
 
 #include <fcntl.h>
 #include <sys/utsname.h>
@@ -259,15 +260,19 @@ namespace kickemu
             args.add (audiodev + ",id=" + audiodevId);
         }
 
-        if (config.getBool ("qemu.network", false))
         {
-            juce::String nic = "user";
-            if (auto model = config.getString ("qemu.nic_model"); model.isNotEmpty())
-                nic << ",model=" << model;
-            if (auto port = config.getInt ("qemu.ssh_host_port", 0); port > 0)
-                nic << ",hostfwd=tcp:127.0.0.1:" << port << "-:22";
-            args.add ("-nic");
-            args.add (nic);
+            const auto net = NetworkConfig::fromConfig (config);
+            juce::String netError;
+            auto nic = net.nicArgument (host.tapFd, netError);
+            if (netError.isNotEmpty() && cmd.error.isEmpty())
+                cmd.error = "Network: " + netError;
+            if (nic.isNotEmpty())
+            {
+                if (auto model = config.getString ("qemu.nic_model"); model.isNotEmpty())
+                    nic << ",model=" << model;
+                args.add ("-nic");
+                args.add (nic);
+            }
         }
 
         for (auto& device : config.getStringArray ("qemu.devices"))

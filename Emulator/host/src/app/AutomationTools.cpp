@@ -1,5 +1,7 @@
 #include "app/AutomationTools.h"
 
+#include "emu/NetworkConfig.h"
+
 #include <contracts/dcl/dcl_contracts.h>
 #include <juce_events/juce_events.h>
 #include <thread>
@@ -218,6 +220,40 @@ namespace kickemu
                          if (! r.failed())
                              r.data = object ({ { "output", r.data.toString() } });
                          return r;
+                     } });
+
+        tools.add ({ "network_get", "Network mode of the LINK port and the modes this host supports.", Schema(),
+                     [this] (const juce::var&)
+                     {
+                         auto n = NetworkConfig::fromConfig (session.config);
+                         juce::Array<juce::var> modes;
+                         for (auto& m : NetworkConfig::modesForHost (QemuCommandLine::Host::detect().isMac))
+                             modes.add (object ({ { "mode", m }, { "description", NetworkConfig::describe (m) }, { "needs", NetworkConfig::requirement (m) } }));
+                         auto r = n.toVar();
+                         r.getDynamicObject()->setProperty ("summary", n.summary());
+                         r.getDynamicObject()->setProperty ("available", modes);
+                         return ToolResult::ok (r);
+                     } });
+
+        tools.add ({ "network_set",
+                     "Change the network of the LINK port (user NAT, vmnet-*, tap, bridge, macvtap, none). Applies at the next "
+                     "power-on, or now with restart=true.",
+                     Schema().string ("mode", "network mode", true).string ("interface", "host interface (vmnet-bridged, tap, macvtap)")
+                             .string ("bridge", "bridge name").integer ("ssh_port", "user mode: host port for guest ssh (0 = off)")
+                             .string ("forwards", "user mode: rules like 'tcp:8080-:80 udp:5000-:5000'")
+                             .string ("mac", "guest MAC").boolean ("restart", "power-cycle now"),
+                     [this] (const juce::var& a)
+                     {
+                         auto n = NetworkConfig::fromVar (a, NetworkConfig::fromConfig (session.config));
+                         juce::String problem;
+                         n.nicArgument (n.mode == "macvtap" ? 0 : -1, problem);
+                         if (problem.isNotEmpty())
+                             return ToolResult::fail (problem);
+                         if (! onMessageThread ([this, n] { n.toConfig (session.config); }))
+                             return ToolResult::fail ("the host did not respond");
+                         if (args::boolean (a, "restart") && session.getQemuState() != Session::QemuState::stopped)
+                             onMessageThread ([this] { session.restartQemu(); });
+                         return ToolResult::ok (object ({ { "network", n.summary() } }));
                      } });
 
         tools.add ({ "log_read",

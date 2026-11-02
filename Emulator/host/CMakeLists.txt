@@ -89,6 +89,7 @@ add_library(kickemu_core STATIC
     src/emu/McuProtocol.cpp
     src/emu/McuEmulator.cpp
     src/emu/QemuCommandLine.cpp
+    src/emu/NetworkConfig.cpp
     src/emu/QemuProcess.cpp
     src/emu/QmpClient.cpp
     src/emu/RfbClient.cpp
@@ -142,6 +143,7 @@ target_sources(KickEmu PRIVATE
     src/app/Session.cpp
     src/app/AutomationTools.cpp
     src/app/Peripherals.cpp
+    src/app/NetworkDialog.cpp
     src/app/MainComponent.cpp
     src/app/TitleBar.cpp
     src/app/SidePanel.cpp

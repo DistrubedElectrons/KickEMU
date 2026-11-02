@@ -1,4 +1,5 @@
 #include "app/MainComponent.h"
+#include "app/NetworkDialog.h"
 
 #include <KickEmuResources.h>
 
@@ -503,7 +504,17 @@ namespace kickemu
         }
         else if (id == "link")
         {
-            menu.addItem (session.io.networkInfo(), false, false, nullptr);
+            NetworkDialog::show (this, NetworkConfig::fromConfig (session.config), theme, running,
+                                 [this] (const NetworkConfig& n, bool restart)
+            {
+                n.toConfig (session.config);
+                settings.set ("network", juce::JSON::toString (n.toVar(), true));
+                if (restart)
+                    session.restartQemu();
+                showHint ("Network: " + n.summary() + (restart ? juce::String() : juce::String (" (at the next power-on)")));
+                updateStatus();
+            });
+            return;
         }
 
         if (menu.getNumItems() > 0)

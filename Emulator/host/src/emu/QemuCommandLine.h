@@ -29,6 +29,7 @@ namespace kickemu
             bool kvmUsable = false;          // /dev/kvm can be opened read-write
             bool hvfUsable = false;          // macOS: kern.hv_support (absent in most CI VMs)
             juce::String audioDriver;        // what audiodev=auto resolves to
+            int tapFd = -1;                  // macvtap: /dev/tapN opened for QEMU to inherit
             static Host detect();
         };
 

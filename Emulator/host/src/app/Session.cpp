@@ -1,6 +1,12 @@
 #include "app/Session.h"
 
+#include "emu/NetworkConfig.h"
 #include "emu/UnixSocket.h"
+
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <unistd.h>
 #include <cstdio>
 
 namespace kickemu
@@ -157,13 +163,8 @@ namespace kickemu
                 s << " and the selected output";
             return s;
         };
-        io.networkUp = [this] { return qemuState.load() == QemuState::running && config.getBool ("qemu.network", false); };
-        io.networkInfo = [this]
-        {
-            if (! config.getBool ("qemu.network", false))
-                return juce::String ("disabled (qemu.network)");
-            return "user network, ssh on localhost:" + juce::String (config.getInt ("qemu.ssh_host_port", 0));
-        };
+        io.networkUp = [this] { return qemuState.load() == QemuState::running && NetworkConfig::fromConfig (config).mode != "none"; };
+        io.networkInfo = [this] { return NetworkConfig::fromConfig (config).summary(); };
         io.cvOut = [this] (int ch) { return cv.getOutputVolts (ch); };
         io.cvIn = [this] (int ch) { return cv.getInputVolts (ch); };
         io.cvSerial = [this] (int ch) { return cv.getOutputSerial (ch); };
@@ -206,7 +207,21 @@ namespace kickemu
             return false;
 
         peripherals.prepareCommandLine();
-        auto cmd = QemuCommandLine::build (config);
+        auto host = QemuCommandLine::Host::detect();
+        // macvtap: QEMU inherits the tap device opened here (no O_CLOEXEC); the
+        // parent closes its copy once the child runs.
+        int tapFd = -1;
+        if (auto net = NetworkConfig::fromConfig (config); net.mode == "macvtap")
+        {
+            auto dev = NetworkConfig::macvtapDevice (net.hostInterface);
+            tapFd = dev == juce::File() ? -1 : ::open (dev.getFullPathName().toRawUTF8(), O_RDWR);
+            if (tapFd < 0)
+                log.add ("host", "macvtap: cannot open " + (dev == juce::File() ? net.hostInterface + " (no such link)" : dev.getFullPathName())
+                                 + ": " + juce::String (std::strerror (errno)));
+        }
+        host.tapFd = tapFd;
+        struct CloseTap { int fd; ~CloseTap() { if (fd >= 0) ::close (fd); } } closeTap { tapFd };
+        auto cmd = QemuCommandLine::build (config, host);
         for (auto& w : cmd.warnings)
             log.add ("host", "Warning: " + w);
         lastCommand = cmd.toShellString();
