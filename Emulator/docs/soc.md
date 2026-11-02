@@ -30,7 +30,7 @@ qemu-system-aarch64 -M kick,boot-mode=rom,emmc=emmc -accel tcg -cpu cortex-a53 .
 | Property | Default | Meaning |
 |---|---|---|
 | `boot-mode` | `kernel` | `kernel` (-kernel/-dtb, QEMU PSCI over SMC), `uboot` (-bios or a loader device), `rom` (BootROM emulation, TCG). Named `boot-mode` because `boot` is QEMU's generic boot-order option. |
-| `emmc`, `sd` | none | drive ids (`-drive if=none,id=...`) for the eMMC on uSDHC3 and the SD slot on uSDHC2 |
+| `emmc`, `sd` | none | drive ids (`-drive if=none,id=...`) for the eMMC on uSDHC3 and the SD slot on uSDHC2; the `sd` drive may have no file (empty slot, see "SD card slot") |
 | `emmc-boot-partition-size` | 0 | eMMC boot partition size; the image then starts with boot0, boot1 |
 | `rom-boot-device` | `emmc` | `boot-mode=rom`: `emmc` (MMC3) or `sd` (SD2) |
 | `uboot-addr` | 0x40200000 | `boot-mode=uboot`: load and entry address for `-bios` |
@@ -179,7 +179,8 @@ events 0/1, 2/3, 4/5, 8/9, 10/11.
 
 - RAM at 0x4000_0000, `-m` (default 2 GiB, max 4 GiB).
 - `serial_hd(0..3)` -> UART1..UART4.
-- eMMC (`emmc` device, `emmc` property) on uSDHC3, SD card on uSDHC2.
+- eMMC (`emmc` device, `emmc` property) on uSDHC3, SD card on uSDHC2. The slot's card
+  detect switch drives GPIO1_IO10 (active low, `cd-gpios` of the DT).
 - I2C1: BD71847 PMIC 0x4b (INTB -> GPIO2_IO08), SN65DSI84 bridge 0x2c (EN <- GPIO2_IO11,
   DSI host = DSIM). I2C2: PCA9534 0x20 (INT -> GPIO1_IO07). I2C3: GT911 0x14 (INT ->
   GPIO5_IO04, INT sense <- GPIO5_IO04), RTC 0x68 (`pcf85263`, DS1337 view). I2C4: CV/gate
@@ -253,6 +254,18 @@ uSDHC (`imx8mm_usdhc.c`) and QEMU's SD/eMMC card model, with these changes:
 - Card I/O is still synchronous in the main loop: a large write blocks the vCPUs, the SDMA
   and the SAI for its duration (a few ms per 64 KiB descriptor batch).
 
+## SD card slot
+
+The `sd` drive is a removable medium (`docs/host-interface.md`): `blockdev-change-medium
+{"device":"sd",...}` inserts a card, `eject {"device":"sd","force":true}` pulls it. The
+uSDHC2 model (QEMU's SDHCI) then sets or clears `PRES_STATE.CINST`/`CDPL` and raises
+`INT_STATUS.CINS`/`CRM` (interrupt when enabled in `INT_SIGNAL_EN`); a card inserted while
+a removal is still unacknowledged appears after QEMU's 1 s insertion delay. Patch
+`0008-sdhci-card-detect-output.patch` gives the SDHCI a `card-detect` GPIO output that
+follows `CINST`; the board inverts it onto GPIO1_IO10, so the pin changes at the same
+moment as the register (the 5.4 `sdhci-esdhc-imx` driver uses the GPIO, `cd-gpios`). The
+level is driven again after every system reset. qtest `kick-sd-test`.
+
 ## Known gaps
 
 - Clock tree: rates are computed for roots and PLLs; reset values of roots and gates are
@@ -285,6 +298,8 @@ uSDHC (`imx8mm_usdhc.c`) and QEMU's SD/eMMC card model, with these changes:
 ## Tests
 
 `meson test -C Emulator/out/qemu-build --suite qtest-aarch64 'qtest-aarch64/kick-*'`; the SoC
-work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test`, `kick-board-test` and
+work adds `kick-clock-test`, `kick-ocotp-test`, `kick-system-test`, `kick-board-test`,
 `kick-uart-test` (UART registers and timing, UART DMA through SDMA1 including inferred
-scripts).
+scripts) and `kick-sd-test` (SD slot insert/eject: PRES_STATE, INT_STATUS, the uSDHC2
+interrupt and the GPIO1_IO10 card detect, including the delayed re-insertion and a card
+present at start-up).

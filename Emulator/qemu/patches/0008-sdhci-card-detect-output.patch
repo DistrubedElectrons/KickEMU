@@ -1,0 +1,56 @@
+diff --git a/hw/sd/sdhci.c b/hw/sd/sdhci.c
+index a612e5cba..035301268 100644
+--- a/hw/sd/sdhci.c
++++ b/hw/sd/sdhci.c
+@@ -227,6 +227,15 @@ static bool sdhci_update_irq(SDHCIState *s)
+     return pending;
+ }
+ 
++/*
++ * Board-level card detect: follows PRNSTS.CARD_PRESENT, so a delayed
++ * re-insertion shows on the pin at the same time as in the register.
++ */
++static void sdhci_update_card_detect(SDHCIState *s)
++{
++    qemu_set_irq(s->card_detect, !!(s->prnsts & SDHC_CARD_PRESENT));
++}
++
+ static void sdhci_raise_insertion_irq(void *opaque)
+ {
+     SDHCIState *s = (SDHCIState *)opaque;
+@@ -240,6 +249,7 @@ static void sdhci_raise_insertion_irq(void *opaque)
+             s->norintsts |= SDHC_NIS_INSERT;
+         }
+         sdhci_update_irq(s);
++        sdhci_update_card_detect(s);
+     }
+ }
+ 
+@@ -267,6 +277,7 @@ static void sdhci_set_inserted(DeviceState *dev, bool level)
+             }
+         }
+         sdhci_update_irq(s);
++        sdhci_update_card_detect(s);
+     }
+ }
+ 
+@@ -1556,6 +1567,7 @@ static void sdhci_sysbus_init(Object *obj)
+     SDHCIState *s = SYSBUS_SDHCI(obj);
+ 
+     sdhci_initfn(s);
++    qdev_init_gpio_out_named(DEVICE(obj), &s->card_detect, "card-detect", 1);
+ }
+ 
+ static void sdhci_sysbus_finalize(Object *obj)
+diff --git a/include/hw/sd/sdhci.h b/include/hw/sd/sdhci.h
+index a9da6203f..9e20ca81b 100644
+--- a/include/hw/sd/sdhci.h
++++ b/include/hw/sd/sdhci.h
+@@ -49,6 +49,7 @@ struct SDHCIState {
+     QEMUTimer *insert_timer;       /* timer for 'changing' sd card. */
+     QEMUTimer *transfer_timer;
+     qemu_irq irq;
++    qemu_irq card_detect;          /* high while PRNSTS reports a card */
+ 
+     /* Registers cleared on reset */
+     uint32_t sdmasysad;    /* SDMA System Address register */

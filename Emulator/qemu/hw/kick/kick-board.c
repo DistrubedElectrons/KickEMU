@@ -30,6 +30,7 @@
 #include "hw/arm/boot.h"
 #include "hw/arm/machines-qom.h"
 #include "hw/core/boards.h"
+#include "hw/core/irq.h"
 #include "hw/core/loader.h"
 #include "hw/core/qdev-properties.h"
 #include "pca9534.h"
@@ -71,6 +72,7 @@ struct KickMachineState {
 
     Notifier powerdown;
     QEMUTimer *pwrkey_release;
+    bool sd_card_present;       /* uSDHC2 card detect, kept across resets */
 
     /* Machine properties */
     char *boot;
@@ -270,6 +272,36 @@ static void kick_board_attach_card(KickMachineState *s, int usdhc,
 }
 
 /*
+ * SD slot card detect switch. The uSDHC2 "card-detect" output follows its
+ * PRES_STATE.CINST, which QEMU's SD card model updates on a medium change
+ * (blockdev-change-medium, eject). The KICK routes the slot's switch to
+ * GPIO1_IO10, active low, so the guest sees the same edge a real card gives.
+ */
+static void kick_sd_cd_drive(KickMachineState *s)
+{
+    qemu_set_irq(qdev_get_gpio_in(kick_gpio(s, KICK_SD_CD_GPIO_BANK),
+                                  KICK_SD_CD_GPIO_PIN),
+                 !s->sd_card_present);
+}
+
+static void kick_sd_card_detect(void *opaque, int n, int level)
+{
+    KickMachineState *s = opaque;
+
+    s->sd_card_present = level;
+    kick_sd_cd_drive(s);
+}
+
+static void kick_board_wire_sd_cd(KickMachineState *s)
+{
+    /* Empty slot until the controller reports a card (pulled-up pad) */
+    s->sd_card_present = false;
+    kick_sd_cd_drive(s);
+    qdev_connect_gpio_out_named(DEVICE(&s->soc.usdhc[1]), "card-detect", 0,
+                                qemu_allocate_irq(kick_sd_card_detect, s, 0));
+}
+
+/*
  * The ON/OFF button on the SNVS: QEMU's system_powerdown presses it for
  * "power-key-press-ms" (KEY_POWER in Linux, KEY_STOP in the KICK firmware).
  */
@@ -398,6 +430,7 @@ static void kick_init(MachineState *machine)
 
     kick_board_attach_card(s, 3, s->emmc, TYPE_EMMC);
     kick_board_attach_card(s, 2, s->sd, TYPE_SD_CARD);
+    kick_board_wire_sd_cd(s);
 
     s->pwrkey_release = timer_new_ms(QEMU_CLOCK_VIRTUAL, kick_pwrkey_release,
                                      s);
@@ -477,8 +510,11 @@ static void kick_init(MachineState *machine)
  */
 static void kick_machine_reset(MachineState *machine, ResetType type)
 {
+    KickMachineState *s = KICK_MACHINE(machine);
+
     qemu_devices_reset(type);
-    kick_board_i2c_pullups(KICK_MACHINE(machine));
+    kick_board_i2c_pullups(s);
+    kick_sd_cd_drive(s);
 }
 
 static const char *kick_get_default_cpu_type(const MachineState *ms)

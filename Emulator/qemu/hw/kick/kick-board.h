@@ -14,6 +14,14 @@
 #define KICK_I2C_GPIO_FIRST         14
 #define KICK_I2C_GPIO_LAST          21
 
+/*
+ * SD slot card detect: cd-gpios = <&gpio1 10 GPIO_ACTIVE_LOW> on usdhc2
+ * (imx8mm-var-som-symphony.dts). The switch pulls the pad low while a card
+ * is in the slot; the pad is pulled up when the slot is empty.
+ */
+#define KICK_SD_CD_GPIO_BANK        1
+#define KICK_SD_CD_GPIO_PIN         10
+
 /* SOM devices */
 #define KICK_PMIC_I2C_ADDR          0x4b    /* BD71847 on I2C1 */
 #define KICK_ENET_PHY_ADDR          4       /* AR8033 on the ENET1 MDIO bus */
