@@ -126,7 +126,7 @@ if(KICKEMU_BUILD_APP)
 juce_add_binary_data(kickemu_resources
     HEADER_NAME KickEmuResources.h
     NAMESPACE KickEmuResources
-    SOURCES resources/layout.json)
+    SOURCES resources/layout.json resources/fonts/BarlowSemiCondensed-SemiBold.ttf)
 
 # ------------------------------------------------------------------------------
 # The application.
