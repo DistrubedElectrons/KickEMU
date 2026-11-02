@@ -19,11 +19,12 @@ its screen, touch, MCU link, audio and network (see "Running the KICK applicatio
   encoders, jog wheel and LEDs, the MCU emulator for the control surface, and a MIDI
   bridge with virtual MIDI ports.
 
-## Requirements (macOS)
+## Requirements
 
-- Xcode command line tools, CMake 3.22 or newer, Ninja, Meson, pkg-config
-- Homebrew: `glib pixman dtc libslirp`
-- A container runtime (OrbStack or Docker) for the kernel and boot chain builds
+- macOS (Apple Silicon): Xcode command line tools, CMake 3.22 or newer, Ninja, Meson,
+  pkg-config, Homebrew `glib pixman dtc libslirp llvm lld`
+- Linux (Debian 12+, Ubuntu 24.04+; x86_64 or arm64): `sudo Emulator/tools/install-deps-linux.sh`
+- A container runtime (OrbStack, Docker or Podman) for the kernel and boot chain builds
 
 ## Building
 

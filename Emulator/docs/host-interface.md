@@ -72,3 +72,16 @@ both x and y, mapped onto the 1024x600 panel.
 ## Display
 
 VNC on `vnc.sock` (RFB 3.8, security None). The host reads the panel through it.
+
+## Backlight
+
+`qom-get {"path":"/machine/soc/pwm1","property":"duty-permille"}` returns the PWM1 duty
+(0..1000, 0 while disabled; POUTC polarity applied). PWM1 is `pwm-backlight` on the KICK; the
+host polls it twice a second and darkens the panel accordingly. Machines without the
+property (virt-test) answer with an error and the host keeps full brightness.
+
+## Network
+
+The LINK port's backend is a startup option (`-nic`), built from `qemu.net.*` by
+`NetworkConfig` (user, vmnet-shared/host/bridged, tap, bridge, macvtap, none). For macvtap
+the host opens `/dev/tap<ifindex>` and QEMU inherits it as `tap,fd=N`.
