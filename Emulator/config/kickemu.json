@@ -148,6 +148,21 @@
       "environment": {}
     }
   },
+  "desktop": {
+    "_comment": "Alpine Linux with Xfce on the panel (Emulator/desktop/build.sh), a proof that a general-purpose distribution runs on the machine.",
+    "out_dir": "Emulator/out/desktop",
+    "base_image": "alpine:3.22",
+    "packages": [
+      "openrc", "eudev", "udev-init-scripts", "udev-init-scripts-openrc", "dbus", "dbus-x11", "kmod",
+      "xorg-server", "xf86-video-fbdev", "xf86-input-evdev", "xinit", "xset",
+      "xfce4", "xfce4-terminal", "xfce4-taskmanager", "mousepad", "adwaita-icon-theme", "font-dejavu",
+      "e2fsprogs", "util-linux", "alsa-utils", "evtest", "usbutils", "htop"
+    ],
+    "rootfs_size": "1536M",
+    "emmc_size": "4G",
+    "root_password": "kick",
+    "hostname": "kick-desktop"
+  },
   "storage": {
     "emmc_image": "Emulator/out/images/emmc.img",
     "emmc_size": "14G",
@@ -259,6 +274,16 @@
       },
       "storage": {
         "emmc_image": "Emulator/out/images/emmc-kick-app.img",
+        "use_test_initrd": false
+      }
+    },
+    "alpine-desktop": {
+      "_comment": "Alpine Linux with Xfce from Emulator/desktop/build.sh on the eMMC (rootfs on p1).",
+      "boot": {
+        "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw"
+      },
+      "storage": {
+        "emmc_image": "Emulator/out/desktop/emmc-desktop.img",
         "use_test_initrd": false
       }
     },
