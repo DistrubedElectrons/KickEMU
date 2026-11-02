@@ -60,6 +60,18 @@ find "${BR}" -type f -not -path '*/rootfs_overlay/*' -print0 \
           if [[ "$(head -c 2 "${f}")" == '#!' ]]; then chmod +x "${f}"; fi
       done
 
+# It also lost its symlinks: each is now a one-line file holding the target path (e.g.
+# package/python3-setuptools/python3-setuptools.hash says ../python-setuptools/...hash), which
+# Buildroot reads as an empty hash list. Turn every such file back into the link it was.
+relinked=0
+while IFS= read -r f; do
+    target="$(head -n 1 "${f}")"
+    [[ "$(wc -l < "${f}")" -le 1 && -e "$(dirname "${f}")/${target}" ]] || continue
+    ln -sfn "${target}" "${f}"
+    relinked=$((relinked + 1))
+done < <(grep -rlE '^\.\.?/[^ ]+$' "${BR}" 2>/dev/null)
+log "restored ${relinked} symlinks"
+
 # --- configuration ---------------------------------------------------------------------------
 make -C "${BR}" O="${OUT}" KTKick_defconfig >/dev/null
 sed -e "s|@FIRMWARE_DIR@|${FW}|g" "${FW}/buildroot/emulator.fragment" > "${WORK}/emulator.fragment"
