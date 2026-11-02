@@ -118,6 +118,9 @@ namespace kickemu
         };
         titleBar.restart.onClick = [this] { session.restartQemu(); updateStatus(); };
         titleBar.snapshot.onClick = [this] { saveSnapshot(); };
+        titleBar.record.onClick = [this] { toggleRecording(); };
+        session.deviceFrame = [this] { return device->grabFrame(); };
+        session.recorder.onChanged = [this] { updateStatus(); };
         titleBar.presentation.onClick = [this] { setPresentation (true); };
         titleBar.panel.onClick = [this] { setSidePanelOpen (! sideOpen); };
 
@@ -154,6 +157,8 @@ namespace kickemu
         stopTimer();
         session.onStateChanged = nullptr;
         session.io.onConnectorClicked = nullptr;
+        session.deviceFrame = nullptr;
+        session.recorder.onChanged = nullptr;
         juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
     }
 
@@ -303,6 +308,27 @@ namespace kickemu
         }
     }
 
+    void MainComponent::toggleRecording()
+    {
+        auto& rec = session.recorder;
+        if (rec.isFinishing())
+            return;
+        if (rec.isRecording())
+        {
+            showHint ("Finishing the video...");
+            rec.stop ([this] (const juce::String& error, const juce::File& file)
+            {
+                showHint (error.isEmpty() ? "Video saved to " + file.getFullPathName() : "Video failed: " + error);
+            });
+            return;
+        }
+        auto dir = session.config.resolvePath (session.config.getString ("host.video.dir",
+                                                                         session.config.getString ("host.ui.snapshot_dir", "~/Pictures/KickEmu")));
+        auto file = dir.getNonexistentChildFile ("KickEmu " + juce::Time::getCurrentTime().formatted ("%Y-%m-%d %H.%M.%S"), ".mp4", false);
+        auto r = rec.start (file, session.deviceFrame, true, session.getQemuState() == Session::QemuState::running);
+        showHint (r.wasOk() ? "Recording: Cmd+Shift+R or the record button stops it" : "Cannot record: " + r.getErrorMessage());
+    }
+
     bool MainComponent::keyPressed (const juce::KeyPress& key)
     {
         const auto mods = key.getModifiers();
@@ -311,6 +337,7 @@ namespace kickemu
         {
             if (code == 'P') { setPresentation (! presentation); return true; }
             if (code == 'S' && mods.isShiftDown()) { saveSnapshot(); return true; }
+            if (code == 'R' && mods.isShiftDown()) { toggleRecording(); return true; }
             if (code == 'L') { setSidePanelOpen (! sideOpen); return true; }
             if (code == 'R') { session.restartQemu(); return true; }
             if (code == '.') { session.stopQemu(); return true; }
@@ -547,7 +574,20 @@ namespace kickemu
         s.mcuLinked = session.panel.hostLinked.load();
         s.uartConnected = session.panel.uartConnected.load();
         s.displayConnected = session.framebuffer.connected.load();
+
+        auto& rec = session.recorder;
+        if (rec.isRecording())
+        {
+            const int t = (int) rec.getElapsedSeconds();
+            s.detail = juce::String::formatted ("REC %d:%02d", t / 60, t % 60) + (rec.hasAudio() ? "" : " (no audio)") + "  " + s.detail;
+        }
+        else if (rec.isFinishing())
+        {
+            s.detail = "Saving video  " + s.detail;
+        }
         titleBar.setStatus (s);
+        titleBar.record.setHighlighted (rec.isRecording() || rec.isFinishing());
+        titleBar.record.setTooltip (rec.isRecording() ? "Stop recording (Cmd+Shift+R)" : "Record a video with audio (Cmd+Shift+R)");
 
         titleBar.power.setIcon (session.getQemuState() == Session::QemuState::stopped ? icons::play : icons::stop);
         titleBar.power.setTooltip (session.getQemuState() == Session::QemuState::stopped ? "Start QEMU" : "Stop QEMU (Cmd+.)");
@@ -591,11 +631,14 @@ namespace kickemu
         juce::PopupMenu menu;
         menu.addItem (1, presentation ? "Leave presentation mode" : "Presentation mode", true, false);
         menu.addItem (2, "Save snapshot");
+        menu.addItem (4, session.recorder.isRecording() ? "Stop recording video" : "Record video with audio",
+                      ! session.recorder.isFinishing());
         menu.addItem (3, "Fit window to device");
         menu.showMenuAsync (juce::PopupMenu::Options(), [this] (int id)
         {
             if (id == 1) setPresentation (! presentation);
             if (id == 2) saveSnapshot();
+            if (id == 4) toggleRecording();
             if (id == 3) titleBar.scale.setSelectedId (fitItemId);
         });
     }

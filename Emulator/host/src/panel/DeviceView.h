@@ -36,6 +36,9 @@ namespace kickemu
 
         /** PNG-ready image of the current view at a pixel scale (e.g. 2 for Retina-sized output). */
         juce::Image snapshot (float pixelScale);
+        /** A video frame: the current view at the scale it is already cached at (no re-render
+            of the control caches, unlike snapshot()). Steps the animation when offscreen. */
+        juce::Image grabFrame();
 
         void resized() override;
         bool keyStateChanged (bool isKeyDown) override;

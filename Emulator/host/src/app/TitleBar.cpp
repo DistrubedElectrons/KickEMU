@@ -45,6 +45,16 @@ namespace kickemu
             return out;
         }
 
+        juce::Path record (juce::Rectangle<float> r)
+        {
+            juce::Path p, out;
+            const float rad = r.getWidth() * 0.26f;
+            p.addEllipse (juce::Rectangle<float> (rad * 2.0f, rad * 2.0f).withCentre (r.getCentre()));
+            line (r.getWidth() * 0.07f).createStrokedPath (out, p);
+            out.addEllipse (juce::Rectangle<float> (rad, rad).withCentre (r.getCentre()));
+            return out;
+        }
+
         juce::Path expand (juce::Rectangle<float> r)
         {
             juce::Path p, out;
@@ -146,13 +156,14 @@ namespace kickemu
           power ("Start / stop QEMU", t, icons::play),
           restart ("Restart QEMU", t, icons::restart),
           snapshot ("Save a PNG snapshot of the device (Cmd+Shift+S)", t, icons::camera),
+          record ("Record a video with audio (Cmd+Shift+R)", t, icons::record),
           presentation ("Presentation mode (Cmd+P)", t, icons::expand),
           panel ("Console, log and settings (Cmd+L)", t, icons::sidebar),
           theme (t)
     {
         addAndMakeVisible (views);
         addAndMakeVisible (scale);
-        for (auto* b : { &power, &restart, &snapshot, &presentation, &panel })
+        for (auto* b : { &power, &restart, &snapshot, &record, &presentation, &panel })
             addAndMakeVisible (b);
         scale.setTooltip ("Device scale");
     }
@@ -214,9 +225,10 @@ namespace kickemu
         r.removeFromLeft (76);
         statusArea = r.removeFromLeft (juce::jmin (420, juce::jmax (220, getWidth() / 2 - 160)));
 
-        auto right = r.removeFromRight (5 * 34 + 92);
+        auto right = r.removeFromRight (6 * 34 + 92);
         panel.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));
         presentation.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));
+        record.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));
         snapshot.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));
         restart.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));
         power.setBounds (right.removeFromRight (34).withSizeKeepingCentre (32, 30));

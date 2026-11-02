@@ -2,6 +2,7 @@
 
 #include "automation/ConsoleCapture.h"
 #include "app/Peripherals.h"
+#include "app/VideoRecorder.h"
 #include "config/Config.h"
 #include "emu/ConsoleBridge.h"
 #include "emu/CvBridge.h"
@@ -86,6 +87,12 @@ namespace kickemu
         RfbClient rfb;
         IoStatus io;
         Peripherals peripherals { config, qmp };
+        VideoRecorder recorder { config, peripherals, [this] (const juce::String& s) { log.add ("host", s); } };
+
+        /** What a video records: the device view when a MainComponent exists (it sets this),
+            otherwise the bare 1024x600 panel. Message thread. */
+        std::function<juce::Image()> deviceFrame;
+        juce::Image panelFrame();
 
         /** PWM1 duty (panel backlight, 0..1000), refreshed by pollBacklight(). */
         std::atomic<int> backlightPermille { 1000 };

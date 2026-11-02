@@ -81,6 +81,8 @@ namespace kickemu
         void setPresentation (bool on);
         bool isPresentation() const { return presentation; }
         void saveSnapshot();
+        /** Starts or stops the MP4 recording of the device (with the guest audio). */
+        void toggleRecording();
         /** Steps the panel animation once. The view animates on vblank, which only
             exists for a component on screen; offscreen rendering drives it here. */
         void tickDevice();

@@ -123,6 +123,12 @@ namespace kickemu
         mcu.stop();
     }
 
+    juce::Image Session::panelFrame()
+    {
+        std::lock_guard<std::mutex> guard (framebuffer.lock);
+        return framebuffer.image.isValid() ? framebuffer.image.createCopy() : juce::Image();
+    }
+
     std::vector<Session::MidiEvent> Session::midiSince (juce::uint64 index, size_t max) const
     {
         std::lock_guard<std::mutex> guard (midiLock);

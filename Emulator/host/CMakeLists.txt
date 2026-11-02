@@ -147,6 +147,7 @@ target_sources(KickEmu PRIVATE
     src/app/Session.cpp
     src/app/AutomationTools.cpp
     src/app/Peripherals.cpp
+    src/app/VideoRecorder.cpp
     src/app/NetworkDialog.cpp
     src/app/MainComponent.cpp
     src/app/TitleBar.cpp

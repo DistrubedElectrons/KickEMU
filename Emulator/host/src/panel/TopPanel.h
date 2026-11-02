@@ -44,6 +44,8 @@ namespace kickemu
 
         /** Renders the panel (static layer + controls) into an image at the given pixel scale. */
         juce::Image snapshot (float pixelScale);
+        /** Pixel scale the control caches are rendered at (a frame grab at this scale is cheap). */
+        float getControlsPixelScale() const { return controlsPixelScale; }
 
     private:
         void renderStatic (juce::Graphics& g) const;

@@ -147,6 +147,15 @@ namespace kickemu
         return p.createComponentSnapshot (p.getLocalBounds(), true, pixelScale);
     }
 
+    juce::Image DeviceView::grabFrame()
+    {
+        if (! isShowing())
+            tick();     // no vblank without a peer
+        auto& p = view == View::top ? (juce::Component&) *top
+                : view == View::rear ? (juce::Component&) *rear : (juce::Component&) *front;
+        return p.createComponentSnapshot (p.getLocalBounds(), true, juce::jmax (1.0f, top->getControlsPixelScale()));
+    }
+
     void DeviceView::tick()
     {
         const double now = juce::Time::getMillisecondCounterHiRes() / 1000.0;

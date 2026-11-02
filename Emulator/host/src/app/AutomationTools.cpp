@@ -793,6 +793,65 @@ namespace kickemu
                          return r;
                      } });
 
+        // Video: the device view (or the bare panel without a window) with the guest's
+        // audio output, to an MP4 through ffmpeg. See VideoRecorder.
+        tools.add ({ "record_start",
+                     "Start recording a video (MP4, H.264 + AAC) of the device with the guest's audio output. "
+                     "source: device (the panel with LEDs, as in the window) or panel (the 1024x600 screen only).",
+                     Schema().string ("path", "MP4 file", true)
+                             .enumeration ("source", { "device", "panel" }, "default device when a window/offscreen view exists, else panel")
+                             .boolean ("audio", "record the audio output too (default true)"),
+                     [this, file, running] (const juce::var& a)
+                     {
+                         ToolResult result = ToolResult::fail ("message thread busy");
+                         const auto target = file (a, "path");
+                         const bool audio = args::has (a, "audio") ? args::boolean (a, "audio") : true;
+                         const auto source = args::str (a, "source");
+                         const bool qemuRunning = running();
+                         onMessageThread ([&]
+                         {
+                             VideoRecorder::FrameSource frames = session.deviceFrame;
+                             if (source == "panel" || ! frames)
+                                 frames = [this] { return session.panelFrame(); };
+                             auto r = session.recorder.start (target, frames, audio, qemuRunning);
+                             result = r.wasOk() ? ToolResult::ok (object ({ { "path", target.getFullPathName() },
+                                                                            { "audio", session.recorder.hasAudio() } }))
+                                                : ToolResult::fail (r.getErrorMessage());
+                         });
+                         return result;
+                     } });
+
+        tools.add ({ "record_stop", "Stop the video recording and wait until the MP4 is written.", Schema(),
+                     [this] (const juce::var&)
+                     {
+                         struct State { juce::WaitableEvent done; juce::String error; juce::File file; };
+                         auto st = std::make_shared<State>();
+                         const auto seconds = session.recorder.getElapsedSeconds();
+                         onMessageThread ([this, st]
+                         {
+                             session.recorder.stop ([st] (const juce::String& e, const juce::File& f)
+                             {
+                                 st->error = e; st->file = f; st->done.signal();
+                             });
+                         });
+                         if (! st->done.wait (300000))
+                             return ToolResult::fail ("the encoder did not finish in time");
+                         if (st->error.isNotEmpty())
+                             return ToolResult::fail (st->error);
+                         return ToolResult::ok (object ({ { "path", st->file.getFullPathName() },
+                                                          { "seconds", seconds },
+                                                          { "bytes", (juce::int64) st->file.getSize() } }));
+                     } });
+
+        tools.add ({ "record_status", "Whether a video is being recorded, for how long and to which file.", Schema(),
+                     [this] (const juce::var&)
+                     {
+                         auto& rec = session.recorder;
+                         return ToolResult::ok (object ({ { "recording", rec.isRecording() }, { "finishing", rec.isFinishing() },
+                                                          { "seconds", rec.getElapsedSeconds() }, { "frames", rec.getFramesWritten() },
+                                                          { "audio", rec.hasAudio() }, { "path", rec.getFile().getFullPathName() } }));
+                     } });
+
         // Guest agent (qemu-ga on UART2): files in and out, programs with exit codes.
         tools.add ({ "guest_ping", "Check that the guest agent (qemu-ga on /dev/ttymxc1) answers; returns its version.", Schema(),
                      [this] (const juce::var&)

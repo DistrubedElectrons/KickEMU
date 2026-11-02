@@ -57,7 +57,7 @@ namespace kickemu
 
         Segmented views;
         juce::ComboBox scale;
-        IconButton power, restart, snapshot, presentation, panel;
+        IconButton power, restart, snapshot, record, presentation, panel;
 
         void paint (juce::Graphics& g) override;
         void resized() override;
@@ -74,6 +74,7 @@ namespace kickemu
         juce::Path stop (juce::Rectangle<float>);
         juce::Path restart (juce::Rectangle<float>);
         juce::Path camera (juce::Rectangle<float>);
+        juce::Path record (juce::Rectangle<float>);
         juce::Path expand (juce::Rectangle<float>);
         juce::Path sidebar (juce::Rectangle<float>);
     }
