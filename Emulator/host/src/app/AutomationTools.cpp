@@ -346,9 +346,19 @@ namespace kickemu
                              return ToolResult::fail (error);
                          auto all = session.consoleText.read (mark, 1 << 20).text;
                          auto output = all;
-                         // Drop the echoed command line and the trailing prompt line.
-                         if (output.startsWith (command))
-                             output = output.fromFirstOccurrenceOf ("\n", false, false);
+                         // Drop the echoed command. Line editors wrap a long echo at the
+                         // terminal width, so match it while skipping inserted line breaks.
+                         {
+                             int i = 0, j = 0;
+                             while (i < output.length() && j < command.length())
+                             {
+                                 if (output[i] == command[j]) { ++i; ++j; }
+                                 else if (output[i] == '\n') ++i;
+                                 else break;
+                             }
+                             if (j == command.length())
+                                 output = output.substring (i).fromFirstOccurrenceOf ("\n", false, false);
+                         }
                          if (m.found)
                              output = output.upToLastOccurrenceOf ("\n", false, false);
                          if (! m.found)
