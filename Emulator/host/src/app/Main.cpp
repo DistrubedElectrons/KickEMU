@@ -5,11 +5,17 @@
 // window and logs to stdout.
 
 #include "app/AppSettings.h"
+#include "app/AutomationTools.h"
+#include "automation/AutomationSocket.h"
+#include "automation/McpServer.h"
 #include "app/CommandLine.h"
 #include "app/MainComponent.h"
 #include "app/Session.h"
 
+#include <BuildInfo.h>
+#include <KickEmuResources.h>
 #include <cstdio>
+#include <thread>
 
 namespace kickemu
 {
@@ -95,7 +101,7 @@ namespace kickemu
 
         void initialise (const juce::String&) override
         {
-            auto cl = CommandLine::parse (getCommandLineParameterArray());
+            cl = CommandLine::parse (getCommandLineParameterArray());
             if (cl.error.isNotEmpty())
             {
                 std::fprintf (stderr, "%s\n\n%s", cl.error.toRawUTF8(), CommandLine::helpText().toRawUTF8());
@@ -117,9 +123,14 @@ namespace kickemu
             auto profile = cl.profile;
             if (result.wasOk() && profile.isNotEmpty())
                 result = config->applyProfile (profile);
+            if (result.wasOk() && cl.runDir.isNotEmpty())
+                result = config->applyOverride ("run_dir=" + cl.runDir);
             for (auto& o : cl.overrides)
                 if (result.wasOk())
                     result = config->applyOverride (o);
+            // Headless runs make no sound unless a backend was chosen explicitly.
+            if (result.wasOk() && cl.headless && config->getString ("qemu.audiodev") == "auto")
+                result = config->applyOverride ("qemu.audiodev=none");
             if (result.failed())
             {
                 fail (result.getErrorMessage(), cl.headless);
@@ -141,7 +152,8 @@ namespace kickemu
 
             settings = std::make_unique<AppSettings>();
             session = std::make_unique<Session> (*config);
-            session->log.echoToStdout = cl.headless;
+            // Under --mcp stdout carries the protocol, so the log goes to stderr.
+            session->log.echo = cl.mcp ? stderr : cl.headless ? stdout : nullptr;
             session->log.add ("host", CommandLine::versionText());
             session->log.add ("host", "Config " + config->getFile().getFullPathName()
                                       + (config->getActiveProfile().isNotEmpty() ? " (profile " + config->getActiveProfile() + ")" : juce::String()));
@@ -152,6 +164,8 @@ namespace kickemu
                 return;
             }
 
+            startAutomation();
+
             // Restore the MIDI device bindings.
             session->midi.setInputDevice (settings->getString ("midiInputDevice"));
             session->midi.setOutputDevice (settings->getString ("midiOutputDevice"));
@@ -159,20 +173,44 @@ namespace kickemu
                 if (settings->file().containsKey ("cvIn" + juce::String (ch)))
                     session->cv.setInputVolts (ch, (float) settings->getDouble ("cvIn" + juce::String (ch), 0.0));
 
+            if (cl.mcp)
+            {
+                // The agent decides when to quit: closing stdin ends the server.
+                mcpThread = std::thread ([this]
+                {
+                    mcp->serve (stdin, stdout, mcpStop);
+                    mcpFinished = true;
+                    juce::MessageManager::callAsync ([] { juce::JUCEApplication::quit(); });
+                });
+                if (! cl.noAutostart && config->getBool ("host.autostart", true))
+                    session->startQemu();
+                return;
+            }
+
             if (cl.headless)
             {
                 // Mirror the console to stdout and exit with QEMU.
-                session->console.onRawOutput = [] (const juce::uint8* d, size_t n) { std::fwrite (d, 1, n, stdout); std::fflush (stdout); };
+                session->onConsoleOutput = [] (const juce::uint8* d, size_t n) { std::fwrite (d, 1, n, stdout); std::fflush (stdout); };
                 session->onStateChanged = [this]
                 {
                     if (session->getQemuState() == Session::QemuState::stopped)
+                    {
+                        if (cl.expect.isNotEmpty() && ! expectMatched)
+                        {
+                            std::fprintf (stderr, "KickEmu: QEMU exited before the console printed /%s/\n", cl.expect.toRawUTF8());
+                            setApplicationReturnValue (4);
+                        }
                         quit();
+                    }
                 };
                 if (! session->startQemu())
                 {
                     setApplicationReturnValue (1);
                     quit();
+                    return;
                 }
+                if (cl.expect.isNotEmpty())
+                    startExpect();
                 return;
             }
 
@@ -204,7 +242,25 @@ namespace kickemu
         void shutdown() override
         {
             window.reset();
+            expectStop = true;
+            if (expectThread.joinable())
+                expectThread.join();
+            automationSocket.reset();
             session.reset();
+            if (mcpThread.joinable())
+            {
+                if (mcpFinished.load())
+                {
+                    mcpThread.join();
+                }
+                else
+                {
+                    // The reader is blocked on stdin and cannot be woken portably. QEMU is
+                    // already down (session reset above): leave without unwinding it.
+                    std::fflush (nullptr);
+                    std::_Exit (getApplicationReturnValue());
+                }
+            }
             if (settings != nullptr)
                 settings->file().saveIfNeeded();
             settings.reset();
@@ -213,6 +269,65 @@ namespace kickemu
         void systemRequestedQuit() override { quit(); }
 
     private:
+        void startAutomation()
+        {
+            juce::String layoutJson (KickEmuResources::layout_json, (size_t) KickEmuResources::layout_jsonSize);
+            if (auto file = config->getPath ("host.ui.layout_file"); file.existsAsFile())
+                layoutJson = file.loadFileAsString();
+            if (auto r = layout.parse (layoutJson); r.failed())
+                session->log.add ("host", r.getErrorMessage());
+
+            tools = std::make_unique<AutomationTools> (*session, layout);
+            mcp = std::make_unique<McpServer> (tools->registry(), "kickemu", buildinfo::version, AutomationTools::instructions());
+            automationSocket = std::make_unique<AutomationSocket> (*mcp);
+            juce::String error;
+            auto path = config->getSocketPath ("automation");
+            if (automationSocket->start (path, error))
+                session->log.add ("host", "Automation (MCP) on " + path.getFullPathName());
+            else
+                session->log.add ("host", "Automation socket unavailable: " + error);
+        }
+
+        void startExpect()
+        {
+            const auto deadline = juce::Time::getMillisecondCounter() + (juce::uint32) (cl.timeoutSeconds > 0 ? cl.timeoutSeconds * 1000 : 0x7fffffff);
+            expectThread = std::thread ([this, deadline]
+            {
+                while (! expectStop.load())
+                {
+                    juce::String error;
+                    auto m = session->consoleText.waitFor (cl.expect, 0, 200, error);
+                    if (error.isNotEmpty() || m.found)
+                    {
+                        expectMatched = m.found;
+                        const int code = m.found ? 0 : 2;
+                        if (m.found)
+                            std::fprintf (stderr, "\nKickEmu: matched /%s/: %s\n", cl.expect.toRawUTF8(), m.context.toRawUTF8());
+                        else
+                            std::fprintf (stderr, "KickEmu: %s\n", error.toRawUTF8());
+                        juce::MessageManager::callAsync ([this, code] { finishHeadless (code); });
+                        return;
+                    }
+                    if (juce::Time::getMillisecondCounter() > deadline)
+                    {
+                        std::fprintf (stderr, "\nKickEmu: timeout after %d s waiting for /%s/\n", cl.timeoutSeconds, cl.expect.toRawUTF8());
+                        juce::MessageManager::callAsync ([this] { finishHeadless (3); });
+                        return;
+                    }
+                }
+            });
+        }
+
+        void finishHeadless (int code)
+        {
+            setApplicationReturnValue (code);
+            session->onStateChanged = [this] { if (session->getQemuState() == Session::QemuState::stopped) quit(); };
+            if (session->getQemuState() == Session::QemuState::stopped)
+                quit();
+            else
+                session->stopQemu();
+        }
+
         void fail (const juce::String& message, bool headless)
         {
             std::fprintf (stderr, "KickEmu: %s\n", message.toRawUTF8());
@@ -231,6 +346,14 @@ namespace kickemu
         std::unique_ptr<AppSettings> settings;
         std::unique_ptr<Session> session;
         std::unique_ptr<MainWindow> window;
+
+        CommandLine cl;
+        Layout layout;
+        std::unique_ptr<AutomationTools> tools;
+        std::unique_ptr<McpServer> mcp;
+        std::unique_ptr<AutomationSocket> automationSocket;
+        std::thread mcpThread, expectThread;
+        std::atomic<bool> mcpStop { false }, mcpFinished { false }, expectStop { false }, expectMatched { false };
     };
 }
 

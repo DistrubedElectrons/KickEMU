@@ -175,7 +175,8 @@
       "console": "console.sock",
       "qmp": "qmp.sock",
       "vnc": "vnc.sock",
-      "cv": "cv.sock"
+      "cv": "cv.sock",
+      "automation": "automation.sock"
     },
     "ui": {
       "scale_presets": [50, 75, 100, 150],

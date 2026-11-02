@@ -1,5 +1,6 @@
 #pragma once
 
+#include "automation/ConsoleCapture.h"
 #include "config/Config.h"
 #include "emu/ConsoleBridge.h"
 #include "emu/CvBridge.h"
@@ -12,6 +13,7 @@
 #include "panel/RearPanel.h"
 
 #include <juce_events/juce_events.h>
+#include <cstdio>
 #include <deque>
 
 namespace kickemu
@@ -33,7 +35,8 @@ namespace kickemu
         void clear();
         juce::uint64 getTotal() const { return total.load(); }
 
-        bool echoToStdout = false;
+        /** Mirror every entry to this stream (stdout in headless mode, stderr under --mcp). */
+        std::FILE* echo = nullptr;
 
     private:
         mutable std::mutex lock;
@@ -76,6 +79,25 @@ namespace kickemu
         RfbClient rfb;
         IoStatus io;
 
+        /** Console text for automation (escape sequences removed, absolute offsets). */
+        ConsoleCapture consoleText;
+
+        /** MIDI messages the guest sent on DIN OUT, numbered from 0. */
+        struct MidiEvent
+        {
+            juce::uint64 index;
+            double time;                    // seconds since the session started
+            std::vector<juce::uint8> bytes;
+        };
+        std::vector<MidiEvent> midiSince (juce::uint64 index, size_t max) const;
+        juce::uint64 midiEnd() const;
+
+        /** Raw console output (stdout mirror in headless mode), on the socket thread. */
+        std::function<void (const juce::uint8*, size_t)> onConsoleOutput;
+
+        /** Milliseconds since QEMU was last started (0 when stopped). */
+        juce::int64 getUptimeMs() const;
+
         juce::String getLastCommandLine() const { return lastCommand; }
         juce::String getSdImage() const { return sdImage; }
 
@@ -93,5 +115,11 @@ namespace kickemu
         std::atomic<bool> shuttingDown { false };
         juce::uint32 stopRequestedAt = 0;
         juce::String lastCommand, sdImage;
+        std::atomic<juce::int64> qemuStartedAt { 0 };
+        const double sessionStart = juce::Time::getMillisecondCounterHiRes();
+
+        mutable std::mutex midiLock;
+        std::deque<MidiEvent> midiLog;
+        juce::uint64 midiTotal = 0;
     };
 }

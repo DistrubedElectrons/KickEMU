@@ -32,7 +32,7 @@ namespace kickemu
         if (virtualOut == nullptr || virtualIn == nullptr)
         {
             if (onLog)
-                onLog ("MIDI: could not create the virtual ports (CoreMIDI unavailable?)");
+                onLog ("MIDI: could not create the virtual ports (no CoreMIDI / ALSA sequencer?)");
         }
         else if (onLog)
         {
@@ -90,11 +90,21 @@ namespace kickemu
     {
         juce::MidiMessage message (data, (int) size, juce::Time::getMillisecondCounterHiRes() * 0.001);
         messagesFromGuest++;
+        if (onGuestMessage)
+            onGuestMessage (data, size);
         std::lock_guard<std::mutex> lock (outputLock);
         if (virtualOut != nullptr)
             virtualOut->sendMessageNow (message);
         if (deviceOut != nullptr)
             deviceOut->sendMessageNow (message);
+    }
+
+    bool MidiBridge::sendToGuest (const juce::uint8* data, size_t size)
+    {
+        if (! server.send (data, size))
+            return false;
+        messagesToGuest++;
+        return true;
     }
 
     void MidiBridge::handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage& message)

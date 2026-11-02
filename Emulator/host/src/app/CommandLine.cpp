@@ -26,6 +26,10 @@ namespace kickemu
             else if (a == "--print-command") cl.printCommand = true;
             else if (a == "--no-start") cl.noAutostart = true;
             else if (a == "--presentation") cl.presentation = true;
+            else if (a == "--mcp") { cl.mcp = true; cl.headless = true; }
+            else if (a.startsWith ("--run-dir")) cl.runDir = juce::File::getCurrentWorkingDirectory().getChildFile (value()).getFullPathName();
+            else if (a.startsWith ("--expect")) { cl.expect = value(); cl.headless = true; }
+            else if (a.startsWith ("--timeout")) cl.timeoutSeconds = value().getIntValue();
             else if (a.startsWith ("--config")) cl.configFile = juce::File::getCurrentWorkingDirectory().getChildFile (value());
             else if (a.startsWith ("--profile")) cl.profile = value();
             else if (a == "--set") cl.overrides.add (value());
@@ -57,6 +61,11 @@ namespace kickemu
                "  --set key.path=value override one config value; repeatable\n"
                "                       (e.g. --set qemu.accel=tcg --set qemu.smp=2)\n"
                "  --headless           no window: run the bridges and QEMU, log to stdout\n"
+               "  --mcp                headless MCP server on stdio (automation tools for agents);\n"
+               "                       logs go to stderr\n"
+               "  --run-dir <dir>      directory for the sockets (default run_dir); use one per instance\n"
+               "  --expect <regex>     headless smoke test: exit 0 once the console prints a match\n"
+               "  --timeout <s>        with --expect: exit 3 if no match in time (QEMU exit before: 4)\n"
                "  --no-start           do not start QEMU automatically\n"
                "  --print-command      print the QEMU command line and exit\n"
                "  --view <top|rear|front>  view to show at start\n"
@@ -64,6 +73,9 @@ namespace kickemu
                "  --screenshot <png>   save a 2x image of the window after a delay, then quit\n"
                "  --screenshot-delay <ms>  delay before --screenshot (default 4000)\n"
                "  --version            print version, branch and commit\n"
-               "  -h, --help           this help\n";
+               "  -h, --help           this help\n"
+               "\n"
+               "Every instance serves the automation tools (MCP over JSON lines) on <run_dir>/automation.sock.\n"
+               "See Emulator/docs/automation.md.\n";
     }
 }

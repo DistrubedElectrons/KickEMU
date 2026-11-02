@@ -11,11 +11,11 @@ namespace kickemu
     void LogBuffer::add (const juce::String& source, const juce::String& text)
     {
         Entry e { juce::Time::getCurrentTime(), source, text };
-        if (echoToStdout)
+        if (echo != nullptr)
         {
             auto line = "[" + source + "] " + text + "\n";
-            std::fputs (line.toRawUTF8(), stdout);
-            std::fflush (stdout);
+            std::fputs (line.toRawUTF8(), echo);
+            std::fflush (echo);
         }
         std::lock_guard<std::mutex> guard (lock);
         entries.push_back (std::move (e));
@@ -69,6 +69,20 @@ namespace kickemu
             log.add ("qmp", "event " + event + (data.isVoid() ? juce::String() : " " + juce::JSON::toString (data, true)));
         };
 
+        console.onRawOutput = [this] (const juce::uint8* d, size_t n)
+        {
+            consoleText.append (d, n);
+            if (onConsoleOutput)
+                onConsoleOutput (d, n);
+        };
+        midi.onGuestMessage = [this] (const juce::uint8* d, size_t n)
+        {
+            std::lock_guard<std::mutex> guard (midiLock);
+            midiLog.push_back ({ midiTotal++, (juce::Time::getMillisecondCounterHiRes() - sessionStart) * 0.001, { d, d + n } });
+            while (midiLog.size() > 4096)
+                midiLog.pop_front();
+        };
+
         qemu.onOutput = [this] (const juce::String& line) { log.add ("qemu", line); };
         qemu.onExit = [this] (int code)
         {
@@ -97,6 +111,28 @@ namespace kickemu
         cv.stop();
         midi.stop();
         mcu.stop();
+    }
+
+    std::vector<Session::MidiEvent> Session::midiSince (juce::uint64 index, size_t max) const
+    {
+        std::lock_guard<std::mutex> guard (midiLock);
+        std::vector<MidiEvent> out;
+        for (auto& e : midiLog)
+            if (e.index >= index && out.size() < max)
+                out.push_back (e);
+        return out;
+    }
+
+    juce::uint64 Session::midiEnd() const
+    {
+        std::lock_guard<std::mutex> guard (midiLock);
+        return midiTotal;
+    }
+
+    juce::int64 Session::getUptimeMs() const
+    {
+        auto t = qemuStartedAt.load();
+        return (t == 0 || qemuState.load() != QemuState::running) ? 0 : juce::Time::currentTimeMillis() - t;
     }
 
     void Session::setupIoStatus()
@@ -145,9 +181,9 @@ namespace kickemu
         if (! runDir.createDirectory())
             return juce::Result::fail ("Cannot create run directory " + runDir.getFullPathName());
 
-        for (auto name : { "mcu", "uart2", "midi", "console", "qmp", "vnc", "cv" })
+        for (auto name : { "mcu", "uart2", "midi", "console", "qmp", "vnc", "cv", "automation" })
             if (! unixsocket::pathFits (config.getSocketPath (name).getFullPathName()))
-                return juce::Result::fail ("Socket path too long for macOS (104 bytes): " + config.getSocketPath (name).getFullPathName()
+                return juce::Result::fail ("Socket path too long (sockaddr_un holds 104 bytes on macOS, 108 on Linux): " + config.getSocketPath (name).getFullPathName()
                                            + ". Set run_dir to a shorter directory.");
 
         juce::String error;
@@ -192,6 +228,7 @@ namespace kickemu
         }
 
         qemuState = QemuState::running;
+        qemuStartedAt = juce::Time::currentTimeMillis();
         const int retry = config.getInt ("host.connect_retry_ms", 300);
         qmp.start (config.getSocketPath ("qmp"), retry);
         if (config.getString ("qemu.display", "vnc") == "vnc")

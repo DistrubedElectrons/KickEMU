@@ -19,6 +19,10 @@ namespace kickemu
         int screenshotDelayMs = 4000;   // --screenshot-delay <ms>
         juce::String screenshotView;    // --view top|rear|front
         bool presentation = false;      // --presentation
+        bool mcp = false;               // --mcp: MCP server on stdio (implies --headless)
+        juce::String runDir;            // --run-dir: sockets and state (= --set run_dir=...)
+        juce::String expect;            // --expect <regex>: exit 0 when the console prints it
+        int timeoutSeconds = 0;         // --timeout <s>: exit 3 when --expect did not match in time
         juce::String error;
 
         static CommandLine parse (const juce::StringArray& args);

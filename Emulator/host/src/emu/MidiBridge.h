@@ -42,6 +42,12 @@ namespace kickemu
 
         std::function<void (const juce::String&)> onLog;
 
+        /** Every complete message the guest sent (DIN OUT), on the socket thread. */
+        std::function<void (const juce::uint8*, size_t)> onGuestMessage;
+
+        /** Writes raw MIDI bytes to the guest's DIN IN. Returns false if QEMU is not attached. */
+        bool sendToGuest (const juce::uint8* data, size_t size);
+
     private:
         void handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& message) override;
         void toHost (const juce::uint8* data, size_t size);

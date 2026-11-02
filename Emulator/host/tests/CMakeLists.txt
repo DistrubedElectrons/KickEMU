@@ -13,7 +13,8 @@ add_executable(KickEmuTests
     MidiStreamParserTests.cpp
     CvBridgeTests.cpp
     TerminalModelTests.cpp
-    SocketTests.cpp)
+    SocketTests.cpp
+    AutomationTests.cpp)
 
 target_link_libraries(KickEmuTests PRIVATE kickemu_core juce::juce_recommended_warning_flags)
 target_compile_definitions(KickEmuTests PRIVATE
