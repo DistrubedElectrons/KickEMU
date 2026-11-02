@@ -72,6 +72,13 @@ while IFS= read -r f; do
 done < <(grep -rlE '^\.\.?/[^ ]+$' "${BR}" 2>/dev/null)
 log "restored ${relinked} symlinks"
 
+# Fixes to the release's Buildroot, kept as patches so Linux/buildroot stays as published.
+for p in "${FW}"/buildroot/patches/*.patch; do
+    [[ -e "${p}" ]] || continue
+    log "applying $(basename "${p}")"
+    patch -d "${BR}" -p1 --forward --quiet < "${p}"
+done
+
 # --- configuration ---------------------------------------------------------------------------
 make -C "${BR}" O="${OUT}" KTKick_defconfig >/dev/null
 sed -e "s|@FIRMWARE_DIR@|${FW}|g" "${FW}/buildroot/emulator.fragment" > "${WORK}/emulator.fragment"

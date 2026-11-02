@@ -1,0 +1,18 @@
+wayland-protocols: depend on wayland for wayland-scanner
+
+NXP's wayland-protocols-imx runs PKG_CHECK_MODULES([wayland-scanner]) in
+configure, but the package declared no dependency, so it only built when
+wayland happened to be installed into staging first. With a different
+build order configure fails: "Package requirements (wayland-scanner) were
+not met".
+
+--- a/package/wayland-protocols/wayland-protocols.mk
++++ b/package/wayland-protocols/wayland-protocols.mk
+@@ -11,6 +11,7 @@
+ WAYLAND_PROTOCOLS_LICENSE_FILES = COPYING
+ WAYLAND_PROTOCOLS_INSTALL_STAGING = YES
+ WAYLAND_PROTOCOLS_INSTALL_TARGET = NO
++WAYLAND_PROTOCOLS_DEPENDENCIES = host-wayland wayland
+ 
+ 
+ define WAYLAND_PROTOCOLS_RUN_AUTOGEN
