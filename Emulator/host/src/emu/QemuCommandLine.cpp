@@ -216,6 +216,10 @@ namespace kickemu
             args.add (cpu);
         }
 
+        // QEMU goes down with the host even when the host dies without cleaning up (a crash,
+        // SIGKILL), instead of running on with the eMMC image open and the ports bound.
+        args.add ("-run-with");
+        args.add ("exit-with-parent=on");
         args.add ("-smp");
         args.add (juce::String (config.getInt ("qemu.smp", 1)));
         args.add ("-m");
