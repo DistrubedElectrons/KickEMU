@@ -65,11 +65,13 @@ public:
 
         beginTest ("accel=auto picks the hypervisor the host has");
         {
-            QemuCommandLine::Host mac { true, false, true };
+            QemuCommandLine::Host mac { true, false, true, false, true };
+            QemuCommandLine::Host macVm { true, false, true, false, false };
             QemuCommandLine::Host linuxKvm { false, true, true, true };
             QemuCommandLine::Host linuxNoKvm { false, true, true, false };
             QemuCommandLine::Host linuxX86 { false, true, false, true };
             expectEquals (QemuCommandLine::resolveAccel ("auto", mac), juce::String ("hvf"));
+            expectEquals (QemuCommandLine::resolveAccel ("auto", macVm), juce::String ("tcg"));
             expectEquals (QemuCommandLine::resolveAccel ("auto", linuxKvm), juce::String ("kvm"));
             expectEquals (QemuCommandLine::resolveAccel ("auto", linuxNoKvm), juce::String ("tcg"));
             expectEquals (QemuCommandLine::resolveAccel ("auto", linuxX86), juce::String ("tcg"));

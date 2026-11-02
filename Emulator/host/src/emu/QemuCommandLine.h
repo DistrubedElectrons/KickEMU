@@ -27,11 +27,12 @@ namespace kickemu
         {
             bool macOS = false, linux = false, arm64 = false;
             bool kvmUsable = false;          // /dev/kvm can be opened read-write
+            bool hvfUsable = false;          // macOS: kern.hv_support (absent in most CI VMs)
             juce::String audioDriver;        // what audiodev=auto resolves to
             static Host detect();
         };
 
-        /** qemu.accel=auto: hvf on macOS, kvm on an arm64 Linux host with /dev/kvm, else tcg. */
+        /** qemu.accel=auto: hvf on macOS with Hypervisor.framework support, kvm on an arm64 Linux host with /dev/kvm, else tcg. */
         static juce::String resolveAccel (const juce::String& configured, const Host& host);
 
         static QemuCommandLine build (const Config& config, const Host& host);

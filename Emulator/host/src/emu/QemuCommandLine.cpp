@@ -2,6 +2,9 @@
 
 #include <fcntl.h>
 #include <sys/utsname.h>
+#if JUCE_MAC
+ #include <sys/sysctl.h>
+#endif
 #include <unistd.h>
 
 namespace kickemu
@@ -48,6 +51,11 @@ namespace kickemu
         utsname u {};
         if (uname (&u) == 0)
             h.arm64 = juce::String (u.machine) == "arm64" || juce::String (u.machine) == "aarch64";
+       #if JUCE_MAC
+        int hv = 0;
+        size_t size = sizeof (hv);
+        h.hvfUsable = sysctlbyname ("kern.hv_support", &hv, &size, nullptr, 0) == 0 && hv != 0;
+       #endif
         if (h.linux)
         {
             int fd = ::open ("/dev/kvm", O_RDWR | O_CLOEXEC);
@@ -79,7 +87,7 @@ namespace kickemu
     {
         if (configured != "auto")
             return configured;
-        if (host.macOS && host.arm64)
+        if (host.macOS && host.arm64 && host.hvfUsable)
             return "hvf";
         if (host.linux && host.arm64 && host.kvmUsable)
             return "kvm";
