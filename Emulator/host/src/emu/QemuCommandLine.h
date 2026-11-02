@@ -25,7 +25,7 @@ namespace kickemu
         /** Host facts that pick "auto" values; injectable for tests. */
         struct Host
         {
-            bool macOS = false, linux = false, arm64 = false;
+            bool isMac = false, isLinux = false, arm64 = false;   // not "linux": GCC predefines it as a macro
             bool kvmUsable = false;          // /dev/kvm can be opened read-write
             bool hvfUsable = false;          // macOS: kern.hv_support (absent in most CI VMs)
             juce::String audioDriver;        // what audiodev=auto resolves to

@@ -12,6 +12,9 @@ project(KickEmu VERSION ${KICKEMU_VERSION} LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Plain ISO C++: in GNU mode GCC predefines `linux` as a macro, which breaks any
+# identifier of that name (the tests' LinuxSideParser instance is called `linux`).
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 get_filename_component(KICKEMU_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)

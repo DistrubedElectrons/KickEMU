@@ -7,6 +7,15 @@ class QemuCommandLineTests : public juce::UnitTest
 public:
     QemuCommandLineTests() : juce::UnitTest ("QEMU command line", "launcher") {}
 
+    // A fixed host, so "auto" values resolve the same on every build machine.
+    static QemuCommandLine::Host testHost()
+    {
+        QemuCommandLine::Host h;
+        h.isMac = h.arm64 = h.hvfUsable = true;
+        h.audioDriver = "coreaudio";
+        return h;
+    }
+
     static juce::String after (const juce::StringArray& args, const juce::String& flag, int occurrence = 0)
     {
         for (int i = 0; i < args.size() - 1; ++i)
@@ -42,7 +51,7 @@ public:
             c.set ("storage.emmc_image", emmc.getFullPathName());
             c.set ("storage.sd_image", tmp.getChildFile ("missing-sd.img").getFullPathName());
 
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             auto& a = cmd.args;
             expectEquals (a[0], fakeQemu.getFullPathName());
@@ -79,7 +88,7 @@ public:
             c.set ("qemu.boot", "rom");
             c.set ("storage.emmc_image", tmp.getChildFile ("none.img").getFullPathName());
             c.set ("storage.sd_image", tmp.getChildFile ("none2.img").getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expectEquals (after (cmd.args, "-accel"), juce::String ("tcg"));
             expectEquals (after (cmd.args, "-cpu"), juce::String ("cortex-a53"));
             expect (after (cmd.args, "-machine").contains ("boot-mode=rom"));
@@ -95,7 +104,7 @@ public:
             c.set ("qemu.boot", "uboot");
             c.set ("boot.uboot_image", kernel.getFullPathName());
             c.set ("storage.emmc_image", emmc.getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expect (after (cmd.args, "-machine").contains ("boot-mode=uboot"));
             expectEquals (after (cmd.args, "-device"),
@@ -114,13 +123,13 @@ public:
             c.set ("boot.kernel_image", kernel.getFullPathName());
             c.set ("boot.dtb", dtb.getFullPathName());
             c.set ("boot.sdma_firmware", fw.getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expect (! after (cmd.args, "-machine").contains ("boot-mode="));
             expect (after (cmd.args, "-machine").contains ("sdma-firmware=" + fw.getFullPathName()));
 
             c.set ("boot.sdma_firmware", tmp.getChildFile ("missing.bin").getFullPathName());
-            auto missing = QemuCommandLine::build (c);
+            auto missing = QemuCommandLine::build (c, testHost());
             expect (missing.ok(), missing.error);
             expect (! after (missing.args, "-machine").contains ("sdma-firmware="));
             expect (missing.warnings.joinIntoString ("\n").contains ("SDMA firmware"));
@@ -134,7 +143,7 @@ public:
             c.set ("run_dir", tmp.getFullPathName());
             c.set ("qemu.binary", fakeQemu.getFullPathName());
             c.set ("boot.kernel_image", kernel.getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expectEquals (after (cmd.args, "-kernel"), kernel.getFullPathName());
             expect (! cmd.args.contains ("-dtb"));
@@ -154,7 +163,7 @@ public:
             c.set ("boot.kernel_image", kernel.getFullPathName());
             c.set ("boot.dtb", dtb.getFullPathName());
             c.set ("storage.test_initrd", initrd.getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expectEquals (after (cmd.args, "-initrd"), initrd.getFullPathName());
             expect (after (cmd.args, "-append").contains ("kick.selftest=1"));
@@ -173,7 +182,7 @@ public:
             c.set ("boot.dtb", dtb.getFullPathName());
             c.set ("storage.emmc_image", emmc.getFullPathName());
             c.set ("storage.test_initrd", tmp.getChildFile ("initramfs.cpio.gz").getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expectEquals (after (cmd.args, "-kernel"), kernel.getFullPathName());
             expectEquals (after (cmd.args, "-dtb"), dtb.getFullPathName());
@@ -196,7 +205,7 @@ public:
             c.set ("run_dir", tmp.getFullPathName());
             c.set ("qemu.binary", fakeQemu.getFullPathName());
             c.set ("boot.firmware", kernel.getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (cmd.ok(), cmd.error);
             expectEquals (after (cmd.args, "-machine"), juce::String ("virt"));
             expectEquals (after (cmd.args, "-serial"), juce::String ("chardev:console"));
@@ -213,7 +222,7 @@ public:
             c.load (repo.getChildFile ("Emulator/config/kickemu.json"));
             c.set ("qemu.binary", tmp.getChildFile ("nope").getFullPathName());
             c.set ("boot.kernel_image", tmp.getChildFile ("nokernel").getFullPathName());
-            auto cmd = QemuCommandLine::build (c);
+            auto cmd = QemuCommandLine::build (c, testHost());
             expect (! cmd.ok());
         }
 

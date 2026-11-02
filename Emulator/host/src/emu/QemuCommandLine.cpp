@@ -44,9 +44,9 @@ namespace kickemu
     {
         Host h;
        #if JUCE_MAC
-        h.macOS = true;
+        h.isMac = true;
        #elif JUCE_LINUX
-        h.linux = true;
+        h.isLinux = true;
        #endif
         utsname u {};
         if (uname (&u) == 0)
@@ -56,7 +56,7 @@ namespace kickemu
         size_t size = sizeof (hv);
         h.hvfUsable = sysctlbyname ("kern.hv_support", &hv, &size, nullptr, 0) == 0 && hv != 0;
        #endif
-        if (h.linux)
+        if (h.isLinux)
         {
             int fd = ::open ("/dev/kvm", O_RDWR | O_CLOEXEC);
             h.kvmUsable = fd >= 0;
@@ -66,7 +66,7 @@ namespace kickemu
 
         // audiodev=auto: the native API on macOS; on Linux the first sound server
         // that is actually running, then ALSA if there is a sound card, else none.
-        if (h.macOS)
+        if (h.isMac)
             h.audioDriver = "coreaudio";
         else
         {
@@ -87,9 +87,9 @@ namespace kickemu
     {
         if (configured != "auto")
             return configured;
-        if (host.macOS && host.arm64 && host.hvfUsable)
+        if (host.isMac && host.arm64 && host.hvfUsable)
             return "hvf";
-        if (host.linux && host.arm64 && host.kvmUsable)
+        if (host.isLinux && host.arm64 && host.kvmUsable)
             return "kvm";
         return "tcg";
     }
