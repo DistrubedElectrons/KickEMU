@@ -1,7 +1,7 @@
 /*
  * qtest for the SAI2 WAV input/recording of the kick machine
  * (docs/host-interface.md, "Audio (SAI2)"): machine properties
- * audio-wav-in, audio-wav-in-loop, audio-wav-out and audio-status, driven
+ * audio-wav-in, audio-wav-in-loop, audio-wav-out, audio-tap and audio-status, driven
  * through the SAI2 registers as fsl_sai programs them.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
@@ -12,6 +12,7 @@
 #include "qapi/error.h"
 #include "qobject/qdict.h"
 #include "qobject/qjson.h"
+#include <sys/un.h>
 
 #define SAI             0x30020000
 #define TCSR            0x008
@@ -402,6 +403,66 @@ static void test_input_rejected(void)
     unlink(ch3);
 }
 
+static bool status_bool(QTestState *qts, const char *key)
+{
+    QDict *st = status(qts);
+    bool v = qdict_get_bool(st, key);
+
+    qobject_unref(st);
+    return v;
+}
+
+/* Playback tap: the played frames arrive as raw S32LE stereo on the chardev */
+static void test_tap(void)
+{
+    g_autofree char *dir = g_dir_make_tmp("ktap-XXXXXX", NULL);
+    g_autofree char *path = g_strdup_printf("%s/t.sock", dir);
+    struct sockaddr_un sa = { .sun_family = AF_UNIX };
+    uint8_t buf[FRAMES_PER_MS * 8];
+    size_t got = 0;
+    QTestState *qts;
+    int fd, tries;
+
+    g_assert_cmpuint(strlen(path), <, sizeof(sa.sun_path));
+    qts = qtest_initf("-chardev socket,id=tap,path=%s,server=on,wait=off "
+                      "-M kick,audio-tap=tap", path);
+    /* Without a reader nothing is queued */
+    play(qts, FRAMES_PER_MS);
+    g_assert_false(status_bool(qts, "tap_connected"));
+    g_assert_cmpint(status_int(qts, "tap_frames"), ==, 0);
+
+    fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    g_assert_cmpint(fd, >=, 0);
+    strcpy(sa.sun_path, path);
+    g_assert_cmpint(connect(fd, (struct sockaddr *)&sa, sizeof(sa)), ==, 0);
+    for (tries = 0; tries < 1000 && !status_bool(qts, "tap_connected");
+         tries++) {
+        g_usleep(1000);
+    }
+    g_assert_true(status_bool(qts, "tap_connected"));
+
+    play(qts, FRAMES_PER_MS);
+    while (got < sizeof(buf)) {
+        GPollFD pfd = { .fd = fd, .events = G_IO_IN };
+        ssize_t n;
+
+        g_assert_cmpint(g_poll(&pfd, 1, 5000), ==, 1);
+        n = read(fd, buf + got, sizeof(buf) - got);
+        g_assert_cmpint(n, >, 0);
+        got += n;
+    }
+    for (int i = 0; i < FRAMES_PER_MS; i++) {
+        g_assert_cmphex(le32(buf + i * 8), ==, tx_word(i, 0));
+        g_assert_cmphex(le32(buf + i * 8 + 4), ==, tx_word(i, 1));
+    }
+    g_assert_cmpint(status_int(qts, "tap_frames"), ==, FRAMES_PER_MS);
+    g_assert_cmpint(status_int(qts, "tap_dropped"), ==, 0);
+    close(fd);
+    qtest_quit(qts);
+    unlink(path);
+    rmdir(dir);
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -412,5 +473,6 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/audio/input-loop", test_input_loop);
     qtest_add_func("/kick/audio/input-formats", test_input_formats);
     qtest_add_func("/kick/audio/input-rejected", test_input_rejected);
+    qtest_add_func("/kick/audio/tap", test_tap);
     return g_test_run();
 }

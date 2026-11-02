@@ -94,6 +94,7 @@ struct KickMachineState {
     char *audio_wav_in;
     char *audio_wav_out;
     bool audio_wav_in_loop;
+    char *audio_tap;            /* chardev id for the SAI2 playback tap */
 };
 
 /* Optional board device models, see kick-board.h */
@@ -225,6 +226,20 @@ static void kick_board_setup_sai2(KickMachineState *s)
 
     if (sai2 && audiodev && object_property_find(OBJECT(sai2), "audiodev")) {
         qdev_prop_set_string(sai2, "audiodev", audiodev);
+    }
+    if (s->audio_tap) {
+        Chardev *chr = qemu_chr_find(s->audio_tap);
+
+        if (!chr) {
+            error_report("kick: audio-tap chardev '%s' not found",
+                         s->audio_tap);
+            exit(1);
+        }
+        if (!sai2 || !object_property_find(OBJECT(sai2), "tap")) {
+            error_report("kick: audio-tap needs the SAI model");
+            exit(1);
+        }
+        qdev_prop_set_chr(sai2, "tap", chr);
     }
     if (!sai) {
         if (s->audio_wav_in || s->audio_wav_out) {
@@ -690,6 +705,7 @@ KICK_STR_PROP(boot)
 KICK_STR_PROP(emmc)
 KICK_STR_PROP(sd)
 KICK_STR_PROP(cv_chardev)
+KICK_STR_PROP(audio_tap)
 KICK_STR_PROP(sdma_firmware)
 KICK_STR_PROP(rom_boot_device)
 
@@ -756,6 +772,7 @@ static void kick_finalize(Object *obj)
     g_free(s->emmc);
     g_free(s->sd);
     g_free(s->cv_chardev);
+    g_free(s->audio_tap);
     g_free(s->sdma_firmware);
     g_free(s->rom_boot_device);
     g_free(s->audio_wav_in);
@@ -793,6 +810,10 @@ static void kick_class_init(ObjectClass *oc, const void *data)
                                   kick_set_cv_chardev);
     object_class_property_set_description(oc, "cv-chardev",
         "Chardev id for the CV/gate converter host protocol");
+    object_class_property_add_str(oc, "audio-tap", kick_get_audio_tap,
+                                  kick_set_audio_tap);
+    object_class_property_set_description(oc, "audio-tap",
+        "Chardev id that receives the SAI2 playback as raw S32LE stereo");
     object_class_property_add(oc, "soc-uid", "uint64", kick_get_soc_uid,
                               kick_set_soc_uid, NULL, NULL);
     object_class_property_set_description(oc, "soc-uid",

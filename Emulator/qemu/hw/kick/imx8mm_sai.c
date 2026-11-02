@@ -43,6 +43,15 @@
  * at the transmitter's frame rate; the RIFF sizes are rewritten about once
  * a second of audio, when the file is closed and on QEMU exit.
  *
+ * Playback tap (qdev property "tap", a chardev; the kick machine exposes it
+ * as audio-tap for SAI2): the same frames as wav-out, as raw interleaved
+ * S32LE stereo without a header, for the host's measuring instruments. The
+ * writes never block the guest: frames wait in a buffer of
+ * IMX8MM_SAI_TAP_FRAMES and are flushed once per tick; when the reader falls
+ * that far behind, new frames are dropped whole (tap_dropped in "status"),
+ * so the byte stream stays frame aligned. A new connection starts at a
+ * frame boundary.
+ *
  * Not modelled (LOG_UNIMP): FIFO combine (xCR4.FCOMB), FIFO packing
  * (xCR4.FPACK), LSB first or offset bit order (xCR5.FBT != word width - 1),
  * timestamp/bit counter registers, sync error (SEF never set), more than
@@ -739,6 +748,9 @@ static char *sai_status_json(IMX8MMSAIState *s)
     json_writer_uint64(jw, "wav_in_pos", s->wav_in.pos);
     json_writer_str(jw, "wav_out", s->wav_out.path ?: "");
     json_writer_uint64(jw, "wav_out_frames", s->wav_out_frames);
+    json_writer_bool(jw, "tap_connected", s->tap_open);
+    json_writer_uint64(jw, "tap_frames", s->tap_bytes / WAV_OUT_FRAME_BYTES);
+    json_writer_uint64(jw, "tap_dropped", s->tap_dropped);
     json_writer_end_object(jw);
     return g_strdup(json_writer_get(jw));
 }
@@ -749,6 +761,60 @@ static void sai_exit_notify(Notifier *n, void *data)
     IMX8MMSAIState *s = container_of(n, IMX8MMSAIState, exit_notifier);
 
     wav_out_close(s);
+}
+
+/* Queue one playback frame for the tap; dropped when the reader lags */
+static void sai_tap_frame(IMX8MMSAIState *s, const int32_t out[2])
+{
+    uint8_t *b;
+
+    if (!s->tap_open) {
+        return;
+    }
+    if (s->tap_len + WAV_OUT_FRAME_BYTES > IMX8MM_SAI_TAP_FRAMES *
+                                           WAV_OUT_FRAME_BYTES) {
+        s->tap_dropped++;
+        return;
+    }
+    b = s->tap_buf + s->tap_len;
+    wav_put_le32(b, out[0]);
+    wav_put_le32(b + 4, out[1]);
+    s->tap_len += WAV_OUT_FRAME_BYTES;
+}
+
+/* Non-blocking: write what the socket takes now, keep the rest */
+static void sai_tap_flush(IMX8MMSAIState *s)
+{
+    int n;
+
+    if (!s->tap_open || !s->tap_len) {
+        return;
+    }
+    n = qemu_chr_fe_write(&s->tap, s->tap_buf, s->tap_len);
+    if (n <= 0) {
+        return;
+    }
+    s->tap_bytes += n;
+    memmove(s->tap_buf, s->tap_buf + n, s->tap_len - n);
+    s->tap_len -= n;
+}
+
+static void sai_tap_event(void *opaque, QEMUChrEvent event)
+{
+    IMX8MMSAIState *s = opaque;
+
+    switch (event) {
+    case CHR_EVENT_OPENED:
+        s->tap_len = 0;         /* the new reader starts on a frame */
+        s->tap_open = true;
+        break;
+    case CHR_EVENT_CLOSED:
+        s->tap_open = false;
+        s->tap_len = 0;
+        break;
+    default:
+        break;
+    }
 }
 
 /*
@@ -811,6 +877,7 @@ static bool sai_tx_frame(IMX8MMSAIState *s, bool allow_underrun)
     }
     s->out_frames++;
     wav_out_frame(s, out);
+    sai_tap_frame(s, out);
 
     /* Data line 0 to the host ring; drop the oldest frame when full */
     if (x->ring) {
@@ -934,6 +1001,7 @@ static void sai_tick(void *opaque)
         }
     }
     sai_update(s);
+    sai_tap_flush(s);
     /* While stalled, look again soon instead of spinning on the main loop */
     sai_schedule_tick(s, now + (defer ? MAX(period / 8, 10 * SCALE_US)
                                       : period));
@@ -1234,6 +1302,11 @@ static void sai_realize(DeviceState *dev, Error **errp)
         return;
     }
     s->tick = timer_new_ns(QEMU_CLOCK_VIRTUAL, sai_tick, s);
+    if (qemu_chr_fe_backend_connected(&s->tap)) {
+        s->tap_buf = g_malloc(IMX8MM_SAI_TAP_FRAMES * WAV_OUT_FRAME_BYTES);
+        qemu_chr_fe_set_handlers(&s->tap, NULL, NULL, sai_tap_event, NULL,
+                                 s, NULL, true);
+    }
     s->exit_notifier.notify = sai_exit_notify;
     qemu_add_exit_notifier(&s->exit_notifier);
 }
@@ -1282,6 +1355,7 @@ static void sai_finalize(Object *obj)
     }
     wav_out_close(s);
     wav_close(&s->wav_in);
+    g_free(s->tap_buf);
 }
 
 static void sai_init(Object *obj)
@@ -1367,6 +1441,8 @@ static const Property sai_properties[] = {
     /* Frame engine batch period and host audio buffer length */
     DEFINE_PROP_UINT32("tick-us", IMX8MMSAIState, tick_us, 500),
     DEFINE_PROP_UINT32("buffer-ms", IMX8MMSAIState, buffer_ms, 100),
+    /* Playback tap for the host instruments (raw S32LE stereo frames) */
+    DEFINE_PROP_CHR("tap", IMX8MMSAIState, tap),
 };
 
 static void sai_class_init(ObjectClass *klass, const void *data)

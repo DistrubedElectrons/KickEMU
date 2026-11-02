@@ -7,6 +7,7 @@
 #ifndef HW_KICK_IMX8MM_SAI_H
 #define HW_KICK_IMX8MM_SAI_H
 
+#include "chardev/char-fe.h"
 #include "hw/core/sysbus.h"
 #include "qemu/audio.h"
 #include "qemu/notify.h"
@@ -18,6 +19,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(IMX8MMSAIState, IMX8MM_SAI)
 #define IMX8MM_SAI_MMIO_SIZE    0x10000
 #define IMX8MM_SAI_LINES        8       /* data lines / FIFOs per direction */
 #define IMX8MM_SAI_FIFO_MAX     128
+#define IMX8MM_SAI_TAP_FRAMES   16384   /* playback tap buffer, ~340 ms */
 
 /*
  * Outputs (qdev named GPIOs): DMA request lines for the SDMA event inputs.
@@ -113,6 +115,14 @@ struct IMX8MMSAIState {
     uint64_t in_frames;         /* frames shifted in by the receiver */
     uint64_t wav_out_frames;    /* frames in the current recording */
     Notifier exit_notifier;
+
+    /* Playback tap: data line 0 frames as raw S32LE stereo on a chardev */
+    CharFrontend tap;
+    bool tap_open;
+    uint8_t *tap_buf;           /* IMX8MM_SAI_TAP_FRAMES * 8 bytes */
+    uint32_t tap_len;           /* bytes waiting to be written */
+    uint64_t tap_bytes;         /* bytes handed to the chardev */
+    uint64_t tap_dropped;       /* frames dropped because the reader lagged */
 };
 
 #endif

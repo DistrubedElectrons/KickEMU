@@ -15,6 +15,7 @@ plain QMP JSON.
 | SD slot | `-drive if=none,id=sd[,file=<img>,format=raw,discard=unmap]` + `-machine kick,sd=sd` |
 | Audio backend | `-audiodev <driver>[,options],id=snd0` + `-machine kick,audiodev=snd0` |
 | CV link | `-chardev socket,id=cv,...` + `-machine kick,cv-chardev=cv` |
+| Audio tap | `-chardev socket,id=audiotap,path=<run_dir>/audiotap.sock,reconnect-ms=500` + `-machine kick,audio-tap=audiotap` |
 | UARTs | `-serial chardev:mcu -serial chardev:uart2 -serial chardev:midi -serial chardev:console` |
 
 The `sd` drive is always created, with or without a file. Without a file the slot is empty
@@ -45,12 +46,30 @@ at run time with `qom-set`:
 | `audio-wav-in` | string | WAV file fed to the capture path (replaces the audiodev input while set). `""` = off |
 | `audio-wav-in-loop` | bool | restart the input file at its end (default false: silence after the end) |
 | `audio-wav-out` | string | record the playback path to this file. Setting it starts a new file; `""` closes and finalises it |
-| `audio-status` | read-only string (JSON) | `{"out_frames":N,"in_frames":N,"wav_in":"...","wav_in_pos":N,"wav_out":"...","wav_out_frames":N}` |
+| `audio-tap` | string, startup only | chardev id that receives the playback path (see below). Unset = no tap |
+| `audio-status` | read-only string (JSON) | `{"out_frames":N,"in_frames":N,"wav_in":"...","wav_in_pos":N,"wav_out":"...","wav_out_frames":N,"tap_connected":B,"tap_frames":N,"tap_dropped":N}` |
 
 WAV input accepts PCM 16, 24 and 32 bit and IEEE float 32 bit, mono or stereo (mono is
 duplicated), at 48000 Hz. Other rates are rejected with an error from `qom-set`. WAV output
 is PCM 32 bit stereo at 48000 Hz (the SAI word as the guest wrote it); the header is
 rewritten when the file is closed and on machine exit.
+
+### Playback tap (`audio-tap`)
+
+The host's measuring instruments (oscilloscope, spectrum analyser, multimeter) read the
+playback path through a chardev. The host listens on `audiotap.sock` in the run directory;
+QEMU connects as a client with reconnect, like the UART sockets.
+
+- Content: the frames the SAI2 transmitter shifts out on data line 0, exactly the samples
+  `audio-wav-out` records: interleaved stereo, left first, each sample signed 32 bit little
+  endian (8 bytes per frame), at the transmitter's frame rate (48000 Hz on the KICK). No
+  header, no framing. Nothing is sent while the transmitter is stopped.
+- Time base: guest virtual time. Frames arrive in batches of the SAI tick (500 us).
+- Never blocks the guest. Frames wait in a 16384-frame buffer (about 340 ms) and are written
+  non-blocking once per tick. When the reader falls further behind, new frames are dropped
+  whole (`tap_dropped` counts them), so the stream stays frame aligned. While no reader is
+  connected nothing is queued. A new connection starts on a frame boundary.
+- Host to QEMU: nothing (bytes the host sends are ignored).
 
 ## USB
 
