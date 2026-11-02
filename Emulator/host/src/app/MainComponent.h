@@ -89,6 +89,10 @@ namespace kickemu
         void applyScaleSelection (int itemId);
         void layoutChildren();
         void showHint (const juce::String& text);
+        void showConnectorMenu (const juce::String& connectorId);
+        void chooseFile (const juce::String& title, const juce::String& patterns, bool save, std::function<void (const juce::File&)> then);
+        /** Hint for an asynchronous peripheral operation, on the message thread. */
+        std::function<void (const juce::String&)> reportResult (const juce::String& success);
         void updatePresentationExit();
         void mouseDown (const juce::MouseEvent& e) override;
 
@@ -111,5 +115,6 @@ namespace kickemu
         juce::String hint;
         juce::uint32 hintTime = 0;
         juce::Rectangle<int> statusLine;
+        std::unique_ptr<juce::FileChooser> fileChooser;
     };
 }

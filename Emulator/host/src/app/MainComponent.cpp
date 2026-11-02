@@ -96,14 +96,7 @@ namespace kickemu
             }
         }
 
-        session.io.onConnectorClicked = [this] (const juce::String& id)
-        {
-            if (id.startsWith ("cv") || id.startsWith ("midi"))
-            {
-                setSidePanelOpen (true);
-                sidePanel->showTab (SidePanel::io);
-            }
-        };
+        session.io.onConnectorClicked = [this] (const juce::String& id) { showConnectorMenu (id); };
 
         // Title bar wiring.
         titleBar.views.onChange = [this] (int i)
@@ -332,6 +325,189 @@ namespace kickemu
             if (code == juce::KeyPress::escapeKey && presentation) { setPresentation (false); return true; }
         }
         return false;
+    }
+
+    std::function<void (const juce::String&)> MainComponent::reportResult (const juce::String& success)
+    {
+        return [safe = juce::Component::SafePointer<MainComponent> (this), success] (const juce::String& error)
+        {
+            juce::MessageManager::callAsync ([safe, success, error]
+            {
+                if (safe != nullptr)
+                    safe->showHint (error.isEmpty() ? success : error);
+            });
+        };
+    }
+
+    void MainComponent::chooseFile (const juce::String& title, const juce::String& patterns, bool save,
+                                    std::function<void (const juce::File&)> then)
+    {
+        auto start = juce::File (settings.getString ("lastMediaDir", juce::File::getSpecialLocation (juce::File::userHomeDirectory).getFullPathName()));
+        fileChooser = std::make_unique<juce::FileChooser> (title, start, patterns);
+        auto flags = (save ? juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting
+                           : juce::FileBrowserComponent::openMode) | juce::FileBrowserComponent::canSelectFiles;
+        fileChooser->launchAsync (flags, [this, then] (const juce::FileChooser& fc)
+        {
+            auto file = fc.getResult();
+            if (file == juce::File())
+                return;
+            settings.set ("lastMediaDir", file.getParentDirectory().getFullPathName());
+            then (file);
+        });
+    }
+
+    void MainComponent::showConnectorMenu (const juce::String& id)
+    {
+        auto& per = session.peripherals;
+        const bool running = session.getQemuState() == Session::QemuState::running;
+        juce::PopupMenu menu;
+
+        if (id.startsWith ("cv") || id.startsWith ("midi"))
+        {
+            setSidePanelOpen (true);
+            sidePanel->showTab (SidePanel::io);
+            return;
+        }
+
+        if (id == "power")
+        {
+            menu.addItem (running ? "Power off" : "Power on", [this, running] { if (running) session.stopQemu(); else session.startQemu(); updateStatus(); });
+            if (running)
+                menu.addItem ("Press the power key (clean shutdown)", [this] { session.qmp.execute ("system_powerdown"); });
+        }
+        else if (id == "sd")
+        {
+            auto card = per.getSdImage();
+            if (card != juce::File())
+                menu.addItem ("Eject " + card.getFileName(), [this, running, &per]
+                {
+                    if (running) per.ejectSd (reportResult ("SD card ejected"));
+                    else { per.setSdOffline ({}); showHint ("SD slot empty at power-on"); }
+                });
+            auto insert = [this, running, &per] (const juce::File& f)
+            {
+                if (running) per.insertSd (f, reportResult ("SD card inserted: " + f.getFileName()));
+                else { per.setSdOffline (f); showHint (f.getFileName() + " will be in the slot at power-on"); }
+            };
+            menu.addItem (card != juce::File() ? "Swap card..." : "Insert SD card image...",
+                          [this, insert] { chooseFile ("SD card image", "*.img;*.bin;*.raw;*", false, insert); });
+            menu.addItem ("New blank card (8 GB, sparse)...", [this, insert]
+            {
+                chooseFile ("New SD card image", "*.img", true, [this, insert] (const juce::File& f)
+                {
+                    auto target = f.hasFileExtension ("img") ? f : f.withFileExtension ("img");
+                    target.deleteFile();   // the save dialog already confirmed the overwrite
+                    if (auto r = Peripherals::createImage (target, (juce::int64) 8 << 30); r.failed())
+                        showHint (r.getErrorMessage());
+                    else
+                        insert (target);
+                });
+            });
+        }
+        else if (id == "usb_a" || id == "usb_c")
+        {
+            const auto port = id == "usb_a" ? juce::String ("usb-a") : juce::String ("usb-c");
+            auto attach = [this, &per, port] (const juce::String& kind, const juce::File& image, int vid, int pid)
+            {
+                per.attachUsb (kind, port, image, vid, pid, [report = reportResult ("USB " + kind + " attached")] (const juce::String& e, const juce::String&) { report (e); });
+            };
+            menu.addSectionHeader (id == "usb_a" ? "USB-A (host)" : "USB-C (host role)");
+            menu.addItem ("Attach USB stick image...", running, false, [this, attach]
+            {
+                chooseFile ("USB stick image", "*.img;*.bin;*.raw;*", false, [attach] (const juce::File& f) { attach ("storage", f, 0, 0); });
+            });
+            menu.addItem ("Attach keyboard", running, false, [attach] { attach ("keyboard", {}, 0, 0); });
+            menu.addItem ("Attach mouse", running, false, [attach] { attach ("mouse", {}, 0, 0); });
+            menu.addItem ("Pass through a host device...", running, false, [attach]
+            {
+                auto* w = new juce::AlertWindow ("Pass through a USB device", "Vendor and product id in hex, as lsusb or System Information show them.",
+                                                 juce::MessageBoxIconType::NoIcon);
+                w->addTextEditor ("ids", "1235:8202", "vendor:product");
+                w->addButton ("Attach", 1, juce::KeyPress (juce::KeyPress::returnKey));
+                w->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+                w->enterModalState (true, juce::ModalCallbackFunction::create ([w, attach] (int result)
+                {
+                    auto ids = w->getTextEditorContents ("ids");
+                    if (result == 1 && ids.containsChar (':'))
+                        attach ("host", {}, ids.upToFirstOccurrenceOf (":", false, false).getHexValue32(),
+                                ids.fromFirstOccurrenceOf (":", false, false).getHexValue32());
+                }), true);
+            });
+            bool any = false;
+            for (auto& d : per.getUsb())
+            {
+                if (d.port != port)
+                    continue;
+                if (! any)
+                    menu.addSeparator();
+                any = true;
+                menu.addItem ("Detach " + d.kind + (d.detail.isNotEmpty() ? " (" + juce::File (d.detail).getFileName() + ")" : juce::String()),
+                              [this, &per, devId = d.id] { per.detachUsb (devId, reportResult ("USB device detached")); });
+            }
+        }
+        else if (id.startsWith ("in_") || id.startsWith ("out_") || id == "phones")
+        {
+            const bool input = id.startsWith ("in_");
+            if (input)
+            {
+                auto in = per.getWavIn();
+                menu.addItem ("Play a WAV file into the input...", running, false, [this, &per]
+                {
+                    chooseFile ("WAV for the audio input (48 kHz)", "*.wav", false, [this, &per] (const juce::File& f)
+                    {
+                        per.setWavIn (f, per.getWavInLoop(), reportResult ("Input: " + f.getFileName()));
+                    });
+                });
+                menu.addItem ("Loop the file", running, per.getWavInLoop(), [this, &per, in]
+                {
+                    per.setWavIn (in, ! per.getWavInLoop(), reportResult (per.getWavInLoop() ? "Loop off" : "Loop on"));
+                });
+                if (in != juce::File())
+                    menu.addItem ("Stop " + in.getFileName() + " (back to the host input)", [this, &per]
+                    {
+                        per.setWavIn ({}, false, reportResult ("Input: host audio"));
+                    });
+            }
+            else
+            {
+                auto out = per.getWavOut();
+                if (out != juce::File())
+                    menu.addItem ("Stop recording " + out.getFileName(), [this, &per] { per.setWavOut ({}, reportResult ("Recording saved")); });
+                else
+                    menu.addItem ("Record the output to a WAV file...", running, false, [this, &per]
+                    {
+                        chooseFile ("Record the KICK output", "*.wav", true, [this, &per] (const juce::File& f)
+                        {
+                            per.setWavOut (f.withFileExtension ("wav"), reportResult ("Recording to " + f.getFileName()));
+                        });
+                    });
+            }
+
+            // The host audio API is a QEMU startup option: it applies at the next power-on.
+            juce::PopupMenu backends;
+            const auto current = session.config.getString ("qemu.audiodev", "auto");
+           #if JUCE_MAC
+            juce::StringArray choices { "auto", "coreaudio", "none" };
+           #else
+            juce::StringArray choices { "auto", "pipewire", "pa", "alsa", "jack", "none" };
+           #endif
+            for (auto& b : choices)
+                backends.addItem (b, true, current == b, [this, b]
+                {
+                    session.config.set ("qemu.audiodev", b);
+                    settings.set ("audiodev", b);
+                    showHint ("Audio backend " + b + ": applies at the next power-on");
+                });
+            menu.addSeparator();
+            menu.addSubMenu ("Host audio (" + session.io.audioRoute() + ")", backends);
+        }
+        else if (id == "link")
+        {
+            menu.addItem (session.io.networkInfo(), false, false, nullptr);
+        }
+
+        if (menu.getNumItems() > 0)
+            menu.showMenuAsync (juce::PopupMenu::Options());
     }
 
     void MainComponent::showHint (const juce::String& text)

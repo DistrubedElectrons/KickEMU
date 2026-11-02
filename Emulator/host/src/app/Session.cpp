@@ -64,8 +64,11 @@ namespace kickemu
         cv.onLog = [this] (const juce::String& s) { log.add ("cv", s); };
         qmp.onLog = [this] (const juce::String& s) { log.add ("qmp", s); };
         rfb.onLog = [this] (const juce::String& s) { log.add ("vnc", s); };
+        peripherals.onLog = [this] (const juce::String& s) { log.add ("host", s); };
+        qmp.onReadyChanged = [this] (bool ready) { if (ready) peripherals.reapply(); };
         qmp.onEvent = [this] (const juce::String& event, const juce::var& data)
         {
+            peripherals.handleEvent (event, data);
             log.add ("qmp", "event " + event + (data.isVoid() ? juce::String() : " " + juce::JSON::toString (data, true)));
         };
 
@@ -172,7 +175,7 @@ namespace kickemu
             return dev.isEmpty() ? juce::String ("no audio backend configured (qemu.audiodev)")
                                  : "QEMU " + dev + " backend (system default device)";
         };
-        io.sdImage = [this] { return sdImage; };
+        io.sdImage = [this] { return peripherals.getSdImage().getFileName(); };
     }
 
     juce::Result Session::startBridges()
@@ -202,6 +205,7 @@ namespace kickemu
         if (qemuState.load() != QemuState::stopped)
             return false;
 
+        peripherals.prepareCommandLine();
         auto cmd = QemuCommandLine::build (config);
         for (auto& w : cmd.warnings)
             log.add ("host", "Warning: " + w);
@@ -212,8 +216,6 @@ namespace kickemu
             return false;
         }
 
-        // SD shown in the front view only when the image was attached.
-        sdImage = cmd.args.joinIntoString (" ").contains ("id=sd,") ? config.getPath ("storage.sd_image").getFileName() : juce::String();
 
         // QEMU creates the QMP/VNC sockets; remove stale ones from a crashed run.
         unixsocket::removeSocketFile (config.getSocketPath ("qmp").getFullPathName());

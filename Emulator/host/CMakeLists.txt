@@ -138,6 +138,7 @@ target_sources(KickEmu PRIVATE
     src/app/CommandLine.cpp
     src/app/Session.cpp
     src/app/AutomationTools.cpp
+    src/app/Peripherals.cpp
     src/app/MainComponent.cpp
     src/app/TitleBar.cpp
     src/app/SidePanel.cpp

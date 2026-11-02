@@ -1,6 +1,7 @@
 #pragma once
 
 #include "automation/ConsoleCapture.h"
+#include "app/Peripherals.h"
 #include "config/Config.h"
 #include "emu/ConsoleBridge.h"
 #include "emu/CvBridge.h"
@@ -78,6 +79,7 @@ namespace kickemu
         QmpClient qmp;
         RfbClient rfb;
         IoStatus io;
+        Peripherals peripherals { config, qmp };
 
         /** Console text for automation (escape sequences removed, absolute offsets). */
         ConsoleCapture consoleText;
@@ -99,7 +101,6 @@ namespace kickemu
         juce::int64 getUptimeMs() const;
 
         juce::String getLastCommandLine() const { return lastCommand; }
-        juce::String getSdImage() const { return sdImage; }
 
         /** Called on the message thread when QEMU starts or stops. */
         std::function<void()> onStateChanged;
@@ -114,7 +115,7 @@ namespace kickemu
         bool restartPending = false;
         std::atomic<bool> shuttingDown { false };
         juce::uint32 stopRequestedAt = 0;
-        juce::String lastCommand, sdImage;
+        juce::String lastCommand;
         std::atomic<juce::int64> qemuStartedAt { 0 };
         const double sessionStart = juce::Time::getMillisecondCounterHiRes();
 

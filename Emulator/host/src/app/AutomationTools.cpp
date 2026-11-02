@@ -667,60 +667,69 @@ namespace kickemu
 
     void AutomationTools::addMediaTools()
     {
-        tools.add ({ "sd_insert",
-                     "Insert an SD card image (raw) into the front slot while the machine runs.",
+        // SD, audio files and USB go through Peripherals so the window shows what an
+        // agent plugged in, and it all survives a power cycle.
+        auto& per = session.peripherals;
+        auto wait = [] (std::function<void (Peripherals::Done)> start) -> ToolResult
+        {
+            struct State { juce::WaitableEvent done; juce::String error; };
+            auto st = std::make_shared<State>();
+            start ([st] (const juce::String& e) { st->error = e; st->done.signal(); });
+            if (! st->done.wait (10000))
+                return ToolResult::fail ("QEMU did not answer");
+            return st->error.isEmpty() ? ToolResult::ok() : ToolResult::fail (st->error);
+        };
+        auto file = [] (const juce::var& a, const char* key)
+        {
+            auto path = args::str (a, key);
+            return path.isEmpty() ? juce::File() : juce::File::getCurrentWorkingDirectory().getChildFile (path);
+        };
+        auto running = [this] { return session.getQemuState() == Session::QemuState::running; };
+
+        tools.add ({ "sd_insert", "Insert a raw SD card image into the front slot (hot plug; a card already in is ejected first).",
                      Schema().string ("path", "image file", true),
-                     [this] (const juce::var& a)
+                     [&per, wait, file, running] (const juce::var& a)
                      {
-                         auto file = juce::File::getCurrentWorkingDirectory().getChildFile (args::str (a, "path"));
-                         if (! file.existsAsFile())
-                             return ToolResult::fail ("no such file: " + file.getFullPathName());
-                         return qmp ("blockdev-change-medium", object ({ { "device", "sd" }, { "filename", file.getFullPathName() }, { "format", "raw" } }));
+                         if (! running()) return ToolResult::fail ("QEMU is not running");
+                         return wait ([&per, f = file (a, "path")] (Peripherals::Done d) { per.insertSd (f, d); });
                      } });
 
         tools.add ({ "sd_eject", "Pull the SD card out of the slot.", Schema(),
-                     [this] (const juce::var&) { return qmp ("eject", object ({ { "device", "sd" }, { "force", true } })); } });
-
-        tools.add ({ "sd_status", "Whether a card is in the SD slot and which image.", Schema(),
-                     [this] (const juce::var&)
+                     [&per, wait, running] (const juce::var&)
                      {
-                         auto r = qmp ("query-block", {});
-                         if (r.failed())
-                             return r;
-                         if (auto* list = r.data.getArray())
-                             for (auto& b : *list)
-                                 if (b["device"].toString() == "sd")
-                                     return ToolResult::ok (object ({ { "inserted", b.hasProperty ("inserted") },
-                                                                      { "image", b["inserted"]["file"] } }));
-                         return ToolResult::fail ("the machine has no SD drive");
+                         if (! running()) return ToolResult::fail ("QEMU is not running");
+                         return wait ([&per] (Peripherals::Done d) { per.ejectSd (d); });
                      } });
 
-        auto qomSet = [this] (const juce::String& property, const juce::var& value)
-        {
-            return qmp ("qom-set", object ({ { "path", "/machine" }, { "property", property }, { "value", value } }));
-        };
+        tools.add ({ "sd_status", "The SD card in the slot (as the host tracks it) and QEMU's view of the drive.", Schema(),
+                     [this, &per] (const juce::var&)
+                     {
+                         auto card = per.getSdImage();
+                         auto r = ToolResult::ok (object ({ { "inserted", card != juce::File() }, { "image", card.getFullPathName() } }));
+                         auto q = qmp ("query-block", {});
+                         if (auto* list = q.data.getArray())
+                             for (auto& b : *list)
+                                 if (b["device"].toString() == "sd")
+                                     r.data.getDynamicObject()->setProperty ("qemu_medium", b.hasProperty ("inserted"));
+                         return r;
+                     } });
 
         tools.add ({ "audio_wav_in",
-                     "Feed a 48 kHz WAV file into the audio input (replaces the host input). Empty path stops it.",
-                     Schema().string ("path", "WAV file, or empty to stop", true).boolean ("loop", "repeat the file (default false)"),
-                     [qomSet] (const juce::var& a)
+                     "Feed a 48 kHz WAV file into the audio input instead of the host input. Empty path switches back.",
+                     Schema().string ("path", "WAV file, or empty", true).boolean ("loop", "repeat the file (default false)"),
+                     [&per, wait, file, running] (const juce::var& a)
                      {
-                         auto path = args::str (a, "path");
-                         if (path.isNotEmpty())
-                             path = juce::File::getCurrentWorkingDirectory().getChildFile (path).getFullPathName();
-                         auto r = qomSet ("audio-wav-in-loop", args::boolean (a, "loop"));
-                         return r.failed() ? r : qomSet ("audio-wav-in", path);
+                         if (! running()) return ToolResult::fail ("QEMU is not running");
+                         return wait ([&per, f = file (a, "path"), loop = args::boolean (a, "loop")] (Peripherals::Done d) { per.setWavIn (f, loop, d); });
                      } });
 
         tools.add ({ "audio_wav_out",
-                     "Record the audio output to a WAV file (48 kHz, 32-bit stereo). Empty path stops and finalises the file.",
-                     Schema().string ("path", "WAV file, or empty to stop", true),
-                     [qomSet] (const juce::var& a)
+                     "Record the audio output to a WAV file (48 kHz, 32-bit stereo). Empty path stops and finalises it.",
+                     Schema().string ("path", "WAV file, or empty", true),
+                     [&per, wait, file, running] (const juce::var& a)
                      {
-                         auto path = args::str (a, "path");
-                         if (path.isNotEmpty())
-                             path = juce::File::getCurrentWorkingDirectory().getChildFile (path).getFullPathName();
-                         return qomSet ("audio-wav-out", path);
+                         if (! running()) return ToolResult::fail ("QEMU is not running");
+                         return wait ([&per, f = file (a, "path")] (Peripherals::Done d) { per.setWavOut (f, d); });
                      } });
 
         tools.add ({ "audio_status", "Audio frame counters and the active WAV files.", Schema(),
@@ -737,73 +746,42 @@ namespace kickemu
                      } });
 
         tools.add ({ "usb_attach",
-                     "Plug a virtual device into a USB port: storage (raw image), keyboard, mouse, tablet, or host "
+                     "Plug a device into a USB port: storage (raw image), keyboard, mouse, tablet, or host "
                      "(pass through a host device by vendor/product id).",
                      Schema().enumeration ("device", { "storage", "keyboard", "mouse", "tablet", "host" }, "device kind", true)
                              .enumeration ("port", { "usb-a", "usb-c" }, "default usb-a")
-                             .string ("path", "storage: image file").string ("vendorid", "host: e.g. 0x1235")
-                             .string ("productid", "host: e.g. 0x8202").string ("id", "device id for usb_detach (default generated)"),
-                     [this] (const juce::var& a)
+                             .string ("path", "storage: image file").string ("vendorid", "host: hex, e.g. 1235")
+                             .string ("productid", "host: hex, e.g. 8202"),
+                     [&per, file, running] (const juce::var& a)
                      {
-                         static std::atomic<int> counter { 0 };
-                         const auto kind = args::str (a, "device");
-                         const auto bus = args::str (a, "port", "usb-a") + ".0";
-                         const auto id = args::str (a, "id", "usb" + juce::String (++counter));
-                         auto dev = object ({ { "bus", bus }, { "id", id } });
-                         auto* o = dev.getDynamicObject();
-
-                         if (kind == "storage")
-                         {
-                             auto file = juce::File::getCurrentWorkingDirectory().getChildFile (args::str (a, "path"));
-                             if (! file.existsAsFile())
-                                 return ToolResult::fail ("no such file: " + file.getFullPathName());
-                             auto blk = qmp ("blockdev-add", object ({ { "driver", "raw" }, { "node-name", id + "-blk" },
-                                                                        { "file", object ({ { "driver", "file" }, { "filename", file.getFullPathName() } }) } }));
-                             if (blk.failed())
-                                 return blk;
-                             o->setProperty ("driver", "usb-storage");
-                             o->setProperty ("drive", id + "-blk");
-                         }
-                         else if (kind == "keyboard") o->setProperty ("driver", "usb-kbd");
-                         else if (kind == "mouse") o->setProperty ("driver", "usb-mouse");
-                         else if (kind == "tablet") o->setProperty ("driver", "usb-tablet");
-                         else if (kind == "host")
-                         {
-                             o->setProperty ("driver", "usb-host");
-                             o->setProperty ("vendorid", args::str (a, "vendorid").getHexValue32());
-                             o->setProperty ("productid", args::str (a, "productid").getHexValue32());
-                         }
-                         else
-                         {
-                             return ToolResult::fail ("unknown device kind: " + kind);
-                         }
-                         auto r = qmp ("device_add", dev);
-                         if (r.failed())
-                             return r;
-                         return ToolResult::ok (object ({ { "id", id }, { "bus", bus } }));
+                         if (! running()) return ToolResult::fail ("QEMU is not running");
+                         struct State { juce::WaitableEvent done; juce::String error, id; };
+                         auto st = std::make_shared<State>();
+                         per.attachUsb (args::str (a, "device"), args::str (a, "port", "usb-a"), file (a, "path"),
+                                        args::str (a, "vendorid").getHexValue32(), args::str (a, "productid").getHexValue32(),
+                                        [st] (const juce::String& e, const juce::String& id) { st->error = e; st->id = id; st->done.signal(); });
+                         if (! st->done.wait (10000))
+                             return ToolResult::fail ("QEMU did not answer");
+                         if (st->error.isNotEmpty())
+                             return ToolResult::fail (st->error);
+                         return ToolResult::ok (object ({ { "id", st->id } }));
                      } });
 
         tools.add ({ "usb_detach", "Unplug a USB device by the id usb_attach returned.",
                      Schema().string ("id", "device id", true),
-                     [this] (const juce::var& a)
+                     [&per, wait] (const juce::var& a)
                      {
-                         const auto id = args::str (a, "id");
-                         auto r = qmp ("device_del", object ({ { "id", id } }));
-                         if (r.failed())
-                             return r;
-                         // A storage stick also has a block node; it can go once the device is gone.
-                         sleepMs (300);
-                         qmp ("blockdev-del", object ({ { "node-name", id + "-blk" } }));
-                         return ToolResult::ok (object ({ { "id", id } }));
+                         return wait ([&per, id = args::str (a, "id")] (Peripherals::Done d) { per.detachUsb (id, d); });
                      } });
 
-        tools.add ({ "usb_list", "Devices on the emulated USB buses.", Schema(),
-                     [this] (const juce::var&)
+        tools.add ({ "usb_list", "Attached USB devices (host view) and QEMU's 'info usb'.", Schema(),
+                     [this, &per] (const juce::var&)
                      {
+                         juce::Array<juce::var> list;
+                         for (auto& d : per.getUsb())
+                             list.add (object ({ { "id", d.id }, { "port", d.port }, { "device", d.kind }, { "detail", d.detail } }));
                          auto r = qmp ("human-monitor-command", object ({ { "command-line", "info usb" } }));
-                         if (! r.failed())
-                             r.data = object ({ { "devices", r.data.toString() } });
-                         return r;
+                         return ToolResult::ok (object ({ { "devices", list }, { "qemu", r.failed() ? r.error : r.data.toString() } }));
                      } });
     }
 }

@@ -151,6 +151,10 @@ namespace kickemu
             }
 
             settings = std::make_unique<AppSettings>();
+            // The audio backend picked on the panel's audio jacks, unless set on the command line.
+            if (auto dev = settings->getString ("audiodev"); dev.isNotEmpty() && ! cl.headless
+                && ! cl.overrides.joinIntoString (" ").contains ("qemu.audiodev"))
+                config->set ("qemu.audiodev", dev);
             session = std::make_unique<Session> (*config);
             // Under --mcp stdout carries the protocol, so the log goes to stderr.
             session->log.echo = cl.mcp ? stderr : cl.headless ? stdout : nullptr;
