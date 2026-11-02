@@ -28,6 +28,7 @@
 #include "qom/object.h"
 
 #include "imx8mm_anatop.h"
+#include "imx8mm_apbh_dma.h"
 #include "imx8mm_ccm.h"
 #include "imx8mm_cqhci.h"
 #include "imx8mm_ddrc.h"
@@ -247,6 +248,7 @@ enum FslImx8mmIrqs {
     FSL_IMX8MM_USB1_IRQ         = 40,
     FSL_IMX8MM_USB2_IRQ         = 41,
     FSL_IMX8MM_SYSCNT_IRQ       = 47,
+    FSL_IMX8MM_TMU_IRQ          = 49,   /* TEMPMON in the NXP M4 header */
     FSL_IMX8MM_SAI3_IRQ         = 50,
     FSL_IMX8MM_GPT5_GPT6_IRQ    = 51,
     FSL_IMX8MM_GPT4_IRQ         = 52,
@@ -305,6 +307,7 @@ struct FslImx8mmState {
     IMX8MMTMUState      tmu;
     IMX8MMSysCtrState   sysctr;
     IMX8MMDDRCState     ddrc;
+    IMX8MMApbhDmaState  apbh_dma;
 
     IMXGPTState         gpt[FSL_IMX8MM_NUM_GPTS];
     OrIRQState          gpt5_gpt6_irq;

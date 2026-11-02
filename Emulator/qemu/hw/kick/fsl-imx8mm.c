@@ -210,6 +210,8 @@ static void fsl_imx8mm_init(Object *obj)
     object_initialize_child(obj, "tmu", &s->tmu, TYPE_IMX8MM_TMU);
     object_initialize_child(obj, "sysctr", &s->sysctr, TYPE_IMX8MM_SYSCTR);
     object_initialize_child(obj, "ddrc", &s->ddrc, TYPE_IMX8MM_DDRC);
+    object_initialize_child(obj, "apbh-dma", &s->apbh_dma,
+                            TYPE_IMX8MM_APBH_DMA);
 
     for (i = 0; i < FSL_IMX8MM_NUM_UARTS; i++) {
         g_autofree char *name = g_strdup_printf("uart%d", i + 1);
@@ -431,14 +433,22 @@ static bool fsl_imx8mm_realize_system(FslImx8mmState *s, Error **errp)
         !fsl_imx8mm_sysbus(s, &s->iomuxc, MMAP(IOMUXC), -1, errp) ||
         !fsl_imx8mm_sysbus(s, &s->iomuxc_gpr, MMAP(IOMUXC_GPR), -1, errp) ||
         !fsl_imx8mm_sysbus(s, &s->ocotp, MMAP(OCOTP_CTRL), -1, errp) ||
-        /* The TMU interrupt is not listed in imx8mm.dtsi, left unwired */
-        !fsl_imx8mm_sysbus(s, &s->tmu, MMAP(TMU), -1, errp) ||
+        /*
+         * TMU: SPI 49 (TEMPMON_LOW_IRQn in NXP's MIMX8MM6_cm4.h). Not listed
+         * in imx8mm.dtsi, so Linux does not use it.
+         */
+        !fsl_imx8mm_sysbus(s, &s->tmu, MMAP(TMU), FSL_IMX8MM_TMU_IRQ, errp) ||
         !fsl_imx8mm_sysbus(s, &s->snvs, MMAP(SNVS_HP),
                            FSL_IMX8MM_SNVS_RTC_IRQ, errp)) {
         return false;
     }
     sysbus_connect_irq(SYS_BUS_DEVICE(&s->snvs), 1,
                        fsl_imx8mm_irq(s, FSL_IMX8MM_SNVS_PWRKEY_IRQ));
+
+    /* APBH DMA: registers for the mxs-dma probe, no channel ever runs */
+    if (!fsl_imx8mm_sysbus(s, &s->apbh_dma, MMAP(APBH_DMA), -1, errp)) {
+        return false;
+    }
 
     /* DDR controller (MMIO 0) and DDR PHY (MMIO 1) */
     if (!fsl_imx8mm_sysbus(s, &s->ddrc, MMAP(DDR_CTL), -1, errp)) {
@@ -556,6 +566,15 @@ static bool fsl_imx8mm_realize_peripherals(FslImx8mmState *s, Error **errp)
         }
         sysbus_connect_irq(sbd, 1,
                            fsl_imx8mm_irq(s, FSL_IMX8MM_GPIO1_HIGH_IRQ + 2 * i));
+    }
+    /*
+     * GPIO1 pins 0..7 also have their own interrupt: INT0 is SPI 63 down to
+     * INT7 at SPI 56 (GPIO1_INTn_IRQn in NXP's MIMX8MM6_cm4.h).
+     */
+    for (i = 0; i < IMX_GPIO_PIN_IRQ_COUNT; i++) {
+        qdev_connect_gpio_out_named(DEVICE(&s->gpio[0]), "pin-irq", i,
+                                    fsl_imx8mm_irq(s,
+                                        FSL_IMX8MM_GPIO1_INT7_IRQ + 7 - i));
     }
 
     /*

@@ -101,7 +101,7 @@ the KICK) and at EL1 under HVF; `boot-mode=rom` starts SPL at EL3.
 | 0x32e2_8000 | 32 KiB | Display block control | `imx8mm-dispmix` |
 | 0x32e4_0000 / 0x32e5_0000 | 64 KiB each | USB1 (OTG, USB-C) / USB2 (USB-A), usbmisc at +0x200 | `imx8mm-usb` (QEMU `usb-chipidea` EHCI, host role), buses `usb-c.0` / `usb-a.0` |
 | 0x32f0_0000 / 0x32f8_0000 | | PCIe PHY / TZASC | unimplemented |
-| 0x3300_0000 / 0x3300_2000 | | APBH DMA / GPMI | unimplemented |
+| 0x3300_0000 / 0x3300_2000 | 8 KiB / 24 KiB | APBH DMA / GPMI | `imx8mm.apbh-dma` (registers and module reset only) / unimplemented |
 | 0x3380_0000 | 4 MiB | PCIe | unimplemented |
 | 0x3800_0000 / 0x3800_8000 | | GPU 3D / GPU 2D | `imx8mm-gpu3d` / `imx8mm-gpu2d` |
 | 0x3830_0000 .. 0x3833_0000 | | VPU G1, G2, H1, VPU block control | unimplemented |
@@ -133,12 +133,17 @@ to blocks without a model, and to parts of a slot a model does not decode, are l
 | 26..29 | UART1..UART4 | | 95, 96 | SAI1, SAI2 |
 | 31..33 | ECSPI1..ECSPI3 | | 103 | SDMA2 |
 | 34 | SDMA3 | | 120 | ENET1 MAC (queue 0 and other events) |
-| 40, 41 | USB1, USB2 | | | |
 | 35..38 | I2C1..I2C4 | | 121 | ENET1 IEEE 1588 timer |
+| 40, 41 | USB1, USB2 | | 49 | TMU (TEMPMON) |
+| 56..63 | GPIO1 INT7..INT0 (pins 7..0) | | | |
 
 PPIs: generic timer secure 13, non-secure 14, virtual 11, hypervisor 10; GIC maintenance 9;
-PMU 7 (`imx8mm.dtsi`). Not wired: TMU interrupt (not in the DT), GPIO1 per-pin INT0..7
-(SPI 56..63, the upstream GPIO model has no per-pin outputs), SNVS security violation (20).
+PMU 7 (`imx8mm.dtsi`). The TMU (SPI 49) and GPIO1 per-pin (SPI 56..63) interrupts are not
+in the DT, so Linux does not use them; their numbers are from NXP's `MIMX8MM6_cm4.h`
+(`TEMPMON_LOW_IRQn`, `GPIO1_INTn_IRQn`). The per-pin lines are ISR & IMR of pins 0..7
+(patch `0010-imx-gpio-per-pin-interrupt-outputs.patch` adds them to the upstream GPIO
+model). Not wired: SNVS security violation (20). The HP RTC alarm shares SPI 19 with the
+LP alarm.
 
 DMA requests: UART1/3/4 to SDMA1 events 22/23, 26/27, 28/29 (RX/TX); SAI1/2/3/5/6 to SDMA2
 events 0/1, 2/3, 4/5, 8/9, 10/11.
@@ -156,7 +161,7 @@ events 0/1, 2/3, 4/5, 8/9, 10/11.
 | **IOMUXC / GPR** | register files 0x014..0x540 / GPR0..22 | read back |
 | **OCOTP** `imx8mm.ocotp` | CTRL with SET/CLR/TOG, BUSY/ERROR, RELOAD_SHADOWS; TIMING, DATA (program with the 0x3e77 key, fuses only 0->1, ERROR without key), READ_CTRL/READ_FUSE_DATA, SW_STICKY, SCS; 256 shadow words. Fuses from properties: unique ID (TESTER0/1), TESTER3/4, BOOT_CFG0..3, MAC0 (set to the NIC MAC by the board), raw `fuse-override` pairs; survive guest resets | SoC ID, MAC, programming, reload, reset |
 | **TMU** `imx8mm.tmu` | TER, TIER, TIDR (W1C), the three thresholds, TRITSR/TRATSR from the `temperature` property (run-time settable, default 45 C), calibration space as storage | enable, qom-set temperature, threshold |
-| **SNVS** `imx8mm.snvs` | HP and LP real time counters (47-bit, 32.768 kHz, run/stop, settable), LPTAR alarm with timer and SPI 19, LPSR W1C, ON/OFF button (GPIO input `power-key` and `button-pressed` property; HPSR.BTN, LPSR.SPO, SPI 4), power off with LPCR DP_EN+TOP, LPGPR | counter, button, alarm |
+| **SNVS** `imx8mm.snvs` | HP and LP real time counters (47-bit, 32.768 kHz, run/stop, settable), LPTAR alarm with timer and SPI 19, LPSR W1C, ON/OFF button (GPIO input `power-key` and `button-pressed` property; HPSR.BTN, LPSR.SPO, SPI 4), power off with LPCR DP_EN+TOP, long-press power off after LPCR.BTN_PRESS_TIME, HP alarm (HPTAMR/HPTALR, HPCR.HPTA_EN, HPSR.HPTA, SPI 19), LPGPR | counter, button, long press, LP and HP alarm |
 | **System counter** `imx8mm.sysctr` | read, compare (2 comparators with timer-driven ISTAT and IRQ) and control frames (EN, HDBG, FCREQ, CNTCV writable, CNTFID0/1) | count rate, compare IRQ, IMASK, stop |
 | **uSDHC CQHCI** | the CQHCI 5.10 register block at +0x100 (idle engine: halt, status W1C, read-only IDs) | `kick-system-test` |
 | **DDR controller + PHY** `imx8mm.ddrc` | uMCTL2 register file with STAT/operating mode, DFIMISC/DFISTAT, SWCTL/SWSTAT, MRSTAT, DBGCAM, scrubber; PHY APB space as storage (firmware images read back), PMU mailbox, training start reports "pass" | via `boot-mode=rom` |
@@ -197,7 +202,10 @@ events 0/1, 2/3, 4/5, 8/9, 10/11.
   default (`gt911-reset-wired=on` connects it).
 - ENET1 PHY: AR8033 at MDIO address 4; the OCOTP MAC fuses carry the NIC's MAC.
 - SNVS ON/OFF button: `system_powerdown` presses it for `power-key-press-ms`; also
-  `qom-set /machine/soc/snvs button-pressed true|false`.
+  `qom-set /machine/soc/snvs button-pressed true|false`. Held for LPCR.BTN_PRESS_TIME
+  (reset value: 5 s; 10 s, 15 s or off by the i.MX 6/7 SNVS encoding, not confirmed in the
+  8MM RM) the SNVS powers the machine off like the real PMIC_ON_REQ, whatever the guest
+  does (verified: the vendor kernel test image exits about 5 s into a hold).
 - SAI2: `audiodev`, MCLK1 12.288 MHz (`sai-mclk-hz` SoC property).
 - LCDIF panel size `panel-width/height`.
 
@@ -347,10 +355,12 @@ device. qtest `kick-usb-test`.
 - NXP SiP services (`IMX_SIP_*`) are not provided by QEMU's PSCI: power domain calls return
   "not supported" (the 5.4 driver ignores it), `imx_busfreq` fails to probe with -22. With
   `boot-mode=rom` the real ATF provides them.
-- APBH DMA (mxs-dma probe fails with a reset timeout), CAAM (job rings fail), PWM,
+- APBH DMA: only the registers and the MXS module reset (`mxs-dma 33000000.dma-controller:
+  initialized` under the vendor kernel); no DMA channel runs (GPMI/NAND is unused).
+- CAAM (job rings fail), PWM,
   PCIe, VPU, CSI, MU, FlexSPI, ANA_OSC, DDR block control: unimplemented-device only.
-- TMU interrupt and GPIO1 per-pin interrupts not wired; SNVS long-press power off and
-  security monitor not modelled; HP RTC alarm not modelled.
+- SNVS security monitor and HP periodic interrupt not modelled; the long press only powers
+  off (no power-on from the off state, QEMU exits).
 - uSDHC: eMMC EXT_CSD reads through `mmc extcsd read` (MMC_IOC_CMD) fail in kick-selftest;
   CQHCI task execution not implemented (QEMU's eMMC does not advertise CMDQ).
 - DDR: training is not simulated (always passes); the scrubber does not write the pattern.
@@ -375,5 +385,7 @@ scripts) and `kick-sd-test` (SD slot insert/eject: PRES_STATE, INT_STATUS, the u
 interrupt and the GPIO1_IO10 card detect, including the delayed re-insertion and a card
 present at start-up) and `kick-audio-test` (SAI2 WAV recording through qom-set and at exit,
 WAV input 16/24-bit mono/float with saturation, end-of-file silence and looping, pacing,
-rejected files) and `kick-usb-test` (EHCI/usbmisc registers, full- and high-speed root
-port enable and PSPD, devices on both buses).
+rejected files), `kick-usb-test` (EHCI/usbmisc registers, full- and high-speed root
+port enable and PSPD, devices on both buses); `kick-system-test` also covers the SNVS
+long press (all four BTN_PRESS_TIME settings) and HP alarm, the TMU and GPIO1 per-pin
+interrupts and the APBH DMA module reset.

@@ -24,6 +24,8 @@ struct IMX8MMSNVSState {
     qemu_irq irq_rtc;       /* SNVS consolidated (RTC alarm), SPI 19 */
     qemu_irq irq_pwrkey;    /* ON/OFF button, SPI 4 */
     QEMUTimer *alarm_timer;
+    QEMUTimer *hp_alarm_timer;
+    QEMUTimer *press_timer;     /* long-press power off */
 
     uint32_t regs[IMX8MM_SNVS_NUM_REGS];
 

@@ -7,9 +7,11 @@
  * firmware), the RTC alarm (rtc-snvs) and the status registers, so this
  * model implements:
  *
- *   HPSR   0x14  BTN [6] button level, BI [7] button interrupt (W1C)
- *   HPCR   0x08  RTC_EN [0] starts the HP real time counter
+ *   HPSR   0x14  HPTA [0] HP alarm, BTN [6] button level, BI [7] button
+ *                interrupt (HPTA and BI are W1C)
+ *   HPCR   0x08  RTC_EN [0] starts the HP real time counter, HPTA_EN [1]
  *   HPRTCMR/LR 0x24/0x28  HP RTC, 47 bits of 32.768 kHz ticks
+ *   HPTAMR/LR  0x2c/0x30  HP alarm, compared with the whole 47-bit HP RTC
  *   LPCR   0x38  SRTC_ENV [0], LPTA_EN [1], LPWUI_EN [3], DP_EN [5],
  *                TOP [6], BTN_PRESS_TIME [17:16]
  *   LPSR   0x4c  LPTA [0] alarm, SPO [18] set-power-off request; W1C
@@ -18,8 +20,18 @@
  *   LPGPR0..3 0x90..0x9c  general purpose (battery backed)
  *
  * The button raises SPO (and IRQ 4) on press, like a short push on the
- * real part; the 5 s long-press hardware power off is not modelled.
- * Writing DP_EN | TOP to LPCR turns the system off.
+ * real part. Held for longer than LPCR.BTN_PRESS_TIME the SNVS turns the
+ * system off by itself (PMIC_ON_REQ), whatever software does. Writing
+ * DP_EN | TOP to LPCR turns the system off.
+ *
+ * Sources for the additions: register offsets and bit positions of HPCR,
+ * HPSR, HPTAMR/HPTALR and LPCR.BTN_PRESS_TIME come from NXP's
+ * MIMX8MM6_cm4.h (MCUXpresso SDK); its IRQ 4 description ("button press
+ * shorter than 5 seconds") gives the 5 s default. The other
+ * BTN_PRESS_TIME encodings (01 10 s, 10 15 s, 11 long press disabled) are
+ * the i.MX 6/7 SNVS ones; the 8MM RM was not available to confirm them.
+ * The HP alarm shares the "consolidated" interrupt (SPI 19) with the LP
+ * alarm, as the SNVS non-TZ interrupts are ORed there.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -54,6 +66,8 @@
 #define SNVS_LPGPR3     0x9c
 
 #define HPCR_RTC_EN     BIT(0)
+#define HPCR_HPTA_EN    BIT(1)
+#define HPSR_HPTA       BIT(0)
 #define HPSR_BTN        BIT(6)
 #define HPSR_BI         BIT(7)
 
@@ -62,6 +76,9 @@
 #define LPCR_LPWUI_EN   BIT(3)
 #define LPCR_DP_EN      BIT(5)
 #define LPCR_TOP        BIT(6)
+#define LPCR_BPT_SHIFT  16          /* BTN_PRESS_TIME [17:16] */
+#define LPCR_BPT_MASK   (3u << LPCR_BPT_SHIFT)
+#define BPT_DISABLED    3
 
 #define LPSR_LPTA       BIT(0)
 #define LPSR_SPO        BIT(18)
@@ -99,8 +116,11 @@ static void imx8mm_snvs_update_irq(IMX8MMSNVSState *s)
     uint32_t lpsr = s->regs[R(SNVS_LPSR)];
     uint32_t lpcr = s->regs[R(SNVS_LPCR)];
 
-    qemu_set_irq(s->irq_rtc, (lpsr & LPSR_LPTA) && (lpcr & LPCR_LPTA_EN) &&
-                             (lpcr & LPCR_LPWUI_EN));
+    bool hp = (s->regs[R(SNVS_HPSR)] & HPSR_HPTA) &&
+              (s->regs[R(SNVS_HPCR)] & HPCR_HPTA_EN);
+
+    qemu_set_irq(s->irq_rtc, ((lpsr & LPSR_LPTA) && (lpcr & LPCR_LPTA_EN) &&
+                              (lpcr & LPCR_LPWUI_EN)) || hp);
     qemu_set_irq(s->irq_pwrkey, !!(lpsr & LPSR_SPO));
 }
 
@@ -134,12 +154,59 @@ static void imx8mm_snvs_alarm_cb(void *opaque)
     imx8mm_snvs_check_alarm(opaque);
 }
 
+/* Compare the HP RTC against HPTAMR:HPTALR (47 bits) and rearm the timer */
+static void imx8mm_snvs_check_hp_alarm(IMX8MMSNVSState *s)
+{
+    uint32_t hpcr = s->regs[R(SNVS_HPCR)];
+    uint64_t now_ticks, alarm_ticks;
+
+    timer_del(s->hp_alarm_timer);
+    if ((hpcr & (HPCR_RTC_EN | HPCR_HPTA_EN)) ==
+        (HPCR_RTC_EN | HPCR_HPTA_EN)) {
+        now_ticks = imx8mm_snvs_hp_count(s);
+        alarm_ticks = deposit64(s->regs[R(SNVS_HPTALR)], 32, 15,
+                                s->regs[R(SNVS_HPTAMR)]);
+        if (now_ticks >= alarm_ticks) {
+            s->regs[R(SNVS_HPSR)] |= HPSR_HPTA;
+        } else {
+            timer_mod(s->hp_alarm_timer, qemu_clock_get_ns(rtc_clock) +
+                      muldiv64(alarm_ticks - now_ticks,
+                               NANOSECONDS_PER_SECOND, RTC_FREQ));
+        }
+    }
+    imx8mm_snvs_update_irq(s);
+}
+
+static void imx8mm_snvs_hp_alarm_cb(void *opaque)
+{
+    imx8mm_snvs_check_hp_alarm(opaque);
+}
+
+/*
+ * The button was held for BTN_PRESS_TIME: the SNVS cuts the power. The
+ * timer only runs while the button is held (a release deletes it).
+ */
+static void imx8mm_snvs_press_cb(void *opaque)
+{
+    qemu_system_shutdown_request(SHUTDOWN_CAUSE_GUEST_SHUTDOWN);
+}
+
 static void imx8mm_snvs_set_button(IMX8MMSNVSState *s, bool pressed)
 {
     if (pressed && !s->button) {
+        uint32_t bpt = (s->regs[R(SNVS_LPCR)] & LPCR_BPT_MASK) >>
+                       LPCR_BPT_SHIFT;
+
         /* Press: SPO request and button interrupt status */
         s->regs[R(SNVS_LPSR)] |= LPSR_SPO;
         s->regs[R(SNVS_HPSR)] |= HPSR_BI;
+        if (bpt != BPT_DISABLED) {
+            /* 00: 5 s, 01: 10 s, 10: 15 s */
+            timer_mod(s->press_timer,
+                      qemu_clock_get_ms(QEMU_CLOCK_VIRTUAL) + (bpt + 1) * 5000);
+        }
+    } else if (!pressed) {
+        timer_del(s->press_timer);
     }
     s->button = pressed;
     imx8mm_snvs_update_irq(s);
@@ -188,9 +255,11 @@ static void imx8mm_snvs_write(void *opaque, hwaddr offset, uint64_t value,
         /* Starting or stopping keeps the current count */
         s->hp_held = cnt;
         s->hp_offset = cnt - imx8mm_snvs_ticks();
+        imx8mm_snvs_check_hp_alarm(s);
         break;
     case SNVS_HPSR:
-        s->regs[R(offset)] &= ~(value & HPSR_BI);   /* BI is W1C */
+        s->regs[R(offset)] &= ~(value & (HPSR_BI | HPSR_HPTA));  /* W1C */
+        imx8mm_snvs_check_hp_alarm(s);
         break;
     case SNVS_HPRTCMR:
     case SNVS_HPRTCLR:
@@ -199,6 +268,12 @@ static void imx8mm_snvs_write(void *opaque, hwaddr offset, uint64_t value,
                                        deposit64(cnt, 0, 32, value);
         s->hp_held = cnt;
         s->hp_offset = cnt - imx8mm_snvs_ticks();
+        imx8mm_snvs_check_hp_alarm(s);
+        break;
+    case SNVS_HPTAMR:
+    case SNVS_HPTALR:
+        s->regs[R(offset)] = offset == SNVS_HPTAMR ? value & 0x7fff : value;
+        imx8mm_snvs_check_hp_alarm(s);
         break;
     case SNVS_LPCR:
         cnt = imx8mm_snvs_lp_count(s);
@@ -276,6 +351,8 @@ static void imx8mm_snvs_reset(DeviceState *dev)
 
     memset(s->regs, 0, sizeof(s->regs));
     timer_del(s->alarm_timer);
+    timer_del(s->hp_alarm_timer);
+    timer_del(s->press_timer);
 
     /*
      * The SRTC is battery backed: it holds the wall clock at power-up
@@ -303,6 +380,8 @@ static void imx8mm_snvs_init(Object *obj)
     qdev_init_gpio_in_named(DEVICE(obj), imx8mm_snvs_pwrkey_in,
                             IMX8MM_SNVS_PWRKEY, 1);
     s->alarm_timer = timer_new_ns(rtc_clock, imx8mm_snvs_alarm_cb, s);
+    s->hp_alarm_timer = timer_new_ns(rtc_clock, imx8mm_snvs_hp_alarm_cb, s);
+    s->press_timer = timer_new_ms(QEMU_CLOCK_VIRTUAL, imx8mm_snvs_press_cb, s);
 
     /* Run time control of the ON/OFF button, e.g. qom-set ... true/false */
     object_property_add(obj, "button-pressed", "bool",
@@ -312,8 +391,8 @@ static void imx8mm_snvs_init(Object *obj)
 
 static const VMStateDescription imx8mm_snvs_vmstate = {
     .name = TYPE_IMX8MM_SNVS,
-    .version_id = 1,
-    .minimum_version_id = 1,
+    .version_id = 2,
+    .minimum_version_id = 2,
     .fields = (const VMStateField[]) {
         VMSTATE_UINT32_ARRAY(regs, IMX8MMSNVSState, IMX8MM_SNVS_NUM_REGS),
         VMSTATE_INT64(lp_offset, IMX8MMSNVSState),
@@ -322,6 +401,8 @@ static const VMStateDescription imx8mm_snvs_vmstate = {
         VMSTATE_UINT64(hp_held, IMX8MMSNVSState),
         VMSTATE_BOOL(button, IMX8MMSNVSState),
         VMSTATE_TIMER_PTR(alarm_timer, IMX8MMSNVSState),
+        VMSTATE_TIMER_PTR(hp_alarm_timer, IMX8MMSNVSState),
+        VMSTATE_TIMER_PTR(press_timer, IMX8MMSNVSState),
         VMSTATE_END_OF_LIST()
     },
 };

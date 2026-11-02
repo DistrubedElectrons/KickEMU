@@ -1,7 +1,8 @@
 /*
  * qtest for the i.MX8MM system control models of the kick machine:
- * SRC, GPC, IOMUXC/GPR, TMU, SNVS, system counter, the uSDHC CQHCI and the
- * uSDHC auto CMD23.
+ * SRC, GPC, IOMUXC/GPR, TMU (and its interrupt), SNVS (button, long-press
+ * power off, LP and HP alarms), system counter, GPIO1 per-pin interrupts,
+ * APBH DMA reset, the uSDHC CQHCI and the uSDHC auto CMD23.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
@@ -22,6 +23,8 @@
 #define SYSCNT_CMP      0x306b0000
 #define SYSCNT_CTRL     0x306c0000
 #define USDHC3_BASE     0x30b60000
+#define GPIO1_BASE      0x30200000
+#define APBH_BASE       0x33000000
 #define GICD_BASE       0x38800000
 
 /* GIC SPI n is QEMU GIC input n; pending state via GICD_ISPENDR */
@@ -170,6 +173,183 @@ static void test_snvs(void)
     qtest_clock_step(qts, 2 * NANOSECONDS_PER_SECOND);
     g_assert_cmphex(qtest_readl(qts, SNVS_BASE + 0x4c) & 1, ==, 1);
     g_assert_true(spi_pending(qts, 19));
+    qtest_quit(qts);
+}
+
+static void tmu_set_temp(QTestState *qts, int t)
+{
+    QDict *rsp = qtest_qmp(qts, "{ 'execute': 'qom-set', 'arguments': {"
+                           " 'path': '/machine/soc/tmu', 'property': "
+                           "'temperature', 'value': %d } }", t);
+
+    g_assert(qdict_haskey(rsp, "return"));
+    qobject_unref(rsp);
+}
+
+/* TMU threshold interrupt on SPI 49 when enabled in TIER */
+static void test_tmu_irq(void)
+{
+    QTestState *qts = qtest_init("-M kick");
+
+    qtest_writel(qts, TMU_BASE + 0x00, 1u << 31);
+    qtest_writel(qts, TMU_BASE + 0x10, (1u << 31) | 85);   /* ITTE at 85 C */
+    tmu_set_temp(qts, 90);
+    g_assert_cmphex(qtest_readl(qts, TMU_BASE + 0x0c), ==, 1u << 31);
+    g_assert_false(spi_pending(qts, 49));
+    qtest_writel(qts, TMU_BASE + 0x08, 1u << 31);           /* TIER.ITTEIE */
+    g_assert_true(spi_pending(qts, 49));
+    qtest_writel(qts, TMU_BASE + 0x10, 0);
+    qtest_writel(qts, TMU_BASE + 0x0c, 1u << 31);
+    g_assert_false(spi_pending(qts, 49));
+    qtest_quit(qts);
+}
+
+/* GPIO1 pins 0..7: INT0 is SPI 63 down to INT7 at SPI 56 */
+static void test_gpio1_pin_irq(void)
+{
+    QTestState *qts = qtest_init("-M kick");
+    static const int pins[] = { 0, 3, 7 };
+
+    qtest_writel(qts, GPIO1_BASE + 0x1c, 0x1ff);      /* EDGE_SEL: both */
+    qtest_writel(qts, GPIO1_BASE + 0x14, 0x1ff);      /* IMR */
+    for (int i = 0; i < ARRAY_SIZE(pins); i++) {
+        int p = pins[i];
+
+        /* Start from low: GPIO1_IO07 idles high (PCA9534 INT, open drain) */
+        qtest_set_irq_in(qts, "/machine/soc/gpio1", NULL, p, 0);
+        qtest_writel(qts, GPIO1_BASE + 0x18, 1u << p);
+        qtest_set_irq_in(qts, "/machine/soc/gpio1", NULL, p, 1);
+        for (int spi = 56; spi <= 63; spi++) {
+            g_assert_cmpint(spi_pending(qts, spi), ==, spi == 63 - p);
+        }
+        g_assert_true(spi_pending(qts, 64));
+        qtest_writel(qts, GPIO1_BASE + 0x18, 1u << p);    /* ISR W1C */
+        g_assert_false(spi_pending(qts, 63 - p));
+        qtest_set_irq_in(qts, "/machine/soc/gpio1", NULL, p, 0);
+        qtest_writel(qts, GPIO1_BASE + 0x18, 1u << p);
+    }
+    /* Pin 8 has only the combined interrupt */
+    qtest_set_irq_in(qts, "/machine/soc/gpio1", NULL, 8, 1);
+    g_assert_true(spi_pending(qts, 64));
+    for (int spi = 56; spi <= 63; spi++) {
+        g_assert_false(spi_pending(qts, spi));
+    }
+    /* A masked pin raises nothing */
+    qtest_writel(qts, GPIO1_BASE + 0x18, 0xffffffff);
+    qtest_writel(qts, GPIO1_BASE + 0x14, 0);
+    qtest_set_irq_in(qts, "/machine/soc/gpio1", NULL, 1, 1);
+    g_assert_false(spi_pending(qts, 62));
+    qtest_quit(qts);
+}
+
+static void snvs_button(QTestState *qts, bool pressed)
+{
+    QDict *rsp = qtest_qmp(qts, "{ 'execute': 'qom-set', 'arguments': {"
+                           " 'path': '/machine/soc/snvs', 'property': "
+                           "'button-pressed', 'value': %i } }", pressed);
+
+    g_assert(qdict_haskey(rsp, "return"));
+    qobject_unref(rsp);
+}
+
+static bool vm_shut_down(QTestState *qts)
+{
+    QDict *rsp = qtest_qmp(qts, "{ 'execute': 'query-status' }");
+    bool down = !strcmp(qdict_get_str(qdict_get_qdict(rsp, "return"),
+                                      "status"), "shutdown");
+
+    qobject_unref(rsp);
+    return down;
+}
+
+#define SEC NANOSECONDS_PER_SECOND
+
+/* Holding the ON/OFF button past LPCR.BTN_PRESS_TIME powers off */
+static void test_snvs_long_press(void)
+{
+    static const struct {
+        uint32_t bpt;
+        int64_t off_after;      /* 0: never */
+    } cases[] = { { 0, 5 }, { 1, 10 }, { 2, 15 }, { 3, 0 } };
+
+    for (int i = 0; i < ARRAY_SIZE(cases); i++) {
+        QTestState *qts = qtest_init("-M kick -action shutdown=pause");
+        int64_t t = cases[i].off_after;
+
+        qtest_writel(qts, SNVS_BASE + 0x38, cases[i].bpt << 16);
+        /* A short push is only a key press */
+        snvs_button(qts, true);
+        qtest_clock_step(qts, SEC);
+        snvs_button(qts, false);
+        qtest_clock_step(qts, 20 * SEC);
+        g_assert_false(vm_shut_down(qts));
+
+        snvs_button(qts, true);
+        if (t) {
+            qtest_clock_step(qts, t * SEC - SEC / 10);
+            g_assert_false(vm_shut_down(qts));
+            qtest_clock_step(qts, SEC / 5);
+            g_assert_true(vm_shut_down(qts));
+        } else {
+            qtest_clock_step(qts, 30 * SEC);
+            g_assert_false(vm_shut_down(qts));
+        }
+        qtest_quit(qts);
+    }
+}
+
+/* HP alarm: HPTAMR:HPTALR against the HP RTC, HPSR.HPTA, SPI 19 */
+static void test_snvs_hp_alarm(void)
+{
+    QTestState *qts = qtest_init("-M kick -rtc clock=vm");
+    uint64_t now, alarm;
+
+    qtest_writel(qts, SNVS_BASE + 0x08, 0x1);                 /* RTC_EN */
+    qtest_clock_step(qts, SEC);
+    now = (uint64_t)qtest_readl(qts, SNVS_BASE + 0x24) << 32 |
+          qtest_readl(qts, SNVS_BASE + 0x28);
+    g_assert_cmpuint(now, >=, 32768);
+    alarm = now + 32768;                                      /* +1 s */
+    qtest_writel(qts, SNVS_BASE + 0x2c, alarm >> 32);
+    qtest_writel(qts, SNVS_BASE + 0x30, (uint32_t)alarm);
+    qtest_writel(qts, SNVS_BASE + 0x08, 0x1 | 0x2);           /* HPTA_EN */
+    qtest_clock_step(qts, SEC / 2);
+    g_assert_cmphex(qtest_readl(qts, SNVS_BASE + 0x14) & 1, ==, 0);
+    g_assert_false(spi_pending(qts, 19));
+    qtest_clock_step(qts, SEC);
+    g_assert_cmphex(qtest_readl(qts, SNVS_BASE + 0x14) & 1, ==, 1);
+    g_assert_true(spi_pending(qts, 19));
+    /* Disable and clear (W1C) */
+    qtest_writel(qts, SNVS_BASE + 0x08, 0x1);
+    qtest_writel(qts, SNVS_BASE + 0x14, 0x1);
+    g_assert_cmphex(qtest_readl(qts, SNVS_BASE + 0x14) & 1, ==, 0);
+    g_assert_false(spi_pending(qts, 19));
+    qtest_quit(qts);
+}
+
+/* APBH DMA: the module reset sequence of stmp_reset_block() completes */
+static void test_apbh_reset(void)
+{
+    QTestState *qts = qtest_init("-M kick");
+    const uint32_t sftrst = 1u << 31, clkgate = 1u << 30;
+
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE), ==, sftrst | clkgate);
+    qtest_writel(qts, APBH_BASE + 0x8, sftrst);              /* CLR */
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE) & sftrst, ==, 0);
+    qtest_writel(qts, APBH_BASE + 0x8, clkgate);
+    qtest_writel(qts, APBH_BASE + 0x10 + 0x4, 0xffff0000);   /* CTRL1 SET */
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE + 0x10), ==, 0xffff0000);
+    qtest_writel(qts, APBH_BASE + 0x4, sftrst);              /* SET */
+    /* the block reset and gated its clock */
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE), ==, sftrst | clkgate);
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE + 0x10), ==, 0);
+    qtest_writel(qts, APBH_BASE + 0x8, sftrst);
+    qtest_writel(qts, APBH_BASE + 0x8, clkgate);
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE), ==, 0);
+    /* burst enables as mxs_dma_init sets them, toggle alias */
+    qtest_writel(qts, APBH_BASE + 0x4, 3u << 28);
+    qtest_writel(qts, APBH_BASE + 0xc, 1u << 28);
+    g_assert_cmphex(qtest_readl(qts, APBH_BASE), ==, 1u << 29);
     qtest_quit(qts);
 }
 
@@ -373,6 +553,11 @@ int main(int argc, char **argv)
     qtest_add_func("/kick/iomuxc", test_iomuxc);
     qtest_add_func("/kick/tmu", test_tmu);
     qtest_add_func("/kick/snvs", test_snvs);
+    qtest_add_func("/kick/snvs-long-press", test_snvs_long_press);
+    qtest_add_func("/kick/snvs-hp-alarm", test_snvs_hp_alarm);
+    qtest_add_func("/kick/tmu-irq", test_tmu_irq);
+    qtest_add_func("/kick/gpio1-pin-irq", test_gpio1_pin_irq);
+    qtest_add_func("/kick/apbh-dma-reset", test_apbh_reset);
     qtest_add_func("/kick/sysctr", test_sysctr);
     qtest_add_func("/kick/cqhci", test_cqhci);
     qtest_add_func("/kick/usdhc-auto-cmd23", test_usdhc_auto_cmd23);
