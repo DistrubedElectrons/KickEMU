@@ -287,6 +287,18 @@
         "use_test_initrd": false
       }
     },
+    "buildroot": {
+      "_comment": "KICK Buildroot image (KTKick_defconfig without NXP EULA parts) from the firmware-image workflow, see Emulator/firmware/README.md: kernel, DTB and eMMC (rootfs on p1) with X on fb0 and KT_Kick.",
+      "boot": {
+        "kernel_image": "Emulator/out/firmware/Image",
+        "dtb": "Emulator/out/firmware/imx8mm-var-som-symphony.dtb",
+        "cmdline": "console=ttymxc3,115200 earlycon=ec_imx6q,0x30a60000,115200 root=/dev/mmcblk2p1 rootwait rw"
+      },
+      "storage": {
+        "emmc_image": "Emulator/out/firmware/kick-emmc.img",
+        "use_test_initrd": false
+      }
+    },
     "virt-test": {
       "_comment": "Stock QEMU virt machine with virtio GPU and multitouch, for testing the display, touch and QMP path before the kick machine is ready.",
       "qemu": {
