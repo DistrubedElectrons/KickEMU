@@ -132,6 +132,21 @@ namespace kickemu
         return out;
     }
 
+    void Session::pollBacklight()
+    {
+        if (qemuState.load() != QemuState::running || ! qmp.isReady())
+        {
+            backlightPermille = 1000;
+            return;
+        }
+        // Machines without the property (virt-test) answer with an error: keep full light.
+        qmp.execute ("qom-get", juce::JSON::parse (R"({"path":"/machine/soc/pwm1","property":"duty-permille"})"),
+                     [this] (const juce::var& result, const juce::String& error)
+                     {
+                         backlightPermille = error.isEmpty() ? juce::jlimit (0, 1000, (int) result) : 1000;
+                     });
+    }
+
     juce::uint64 Session::midiEnd() const
     {
         std::lock_guard<std::mutex> guard (midiLock);

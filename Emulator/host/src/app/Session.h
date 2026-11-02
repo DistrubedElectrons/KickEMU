@@ -81,6 +81,11 @@ namespace kickemu
         IoStatus io;
         Peripherals peripherals { config, qmp };
 
+        /** PWM1 duty (panel backlight, 0..1000), refreshed by pollBacklight(). */
+        std::atomic<int> backlightPermille { 1000 };
+        /** Asks QEMU for the backlight duty; no-op when it is not running. */
+        void pollBacklight();
+
         /** Console text for automation (escape sequences removed, absolute offsets). */
         ConsoleCapture consoleText;
 

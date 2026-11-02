@@ -1,5 +1,7 @@
 #include "panel/ScreenComponent.h"
 
+#include <cmath>
+
 namespace kickemu
 {
     ScreenComponent::ScreenComponent (PanelContext& context, const LayoutControl& definition, SharedFramebuffer& framebuffer, QmpClient& client)
@@ -59,6 +61,14 @@ namespace kickemu
     {
         const auto serial = fb.serial.load();
         const bool connected = fb.connected.load();
+        const int backlight = ctx.backlightPermille != nullptr ? ctx.backlightPermille->load() : 1000;
+        if (backlight != lastBacklight)
+        {
+            lastBacklight = backlight;
+            lastSerial = serial;
+            lastConnected = connected;
+            return true;
+        }
         if (serial == lastSerial && connected == lastConnected)
             return false;
         lastSerial = serial;
@@ -99,6 +109,16 @@ namespace kickemu
                                                                                 area.getHeight() / (float) fb.image.getHeight())
                                                       .translated (area.getX(), area.getY()));
                 drewPicture = true;
+
+                // The LCD shows what the backlight lets through: PWM1 duty from the guest.
+                // Perceived brightness is not linear in duty; ^0.6 keeps the default 80 %
+                // close to full and makes low levels visibly dim, 0 is black.
+                if (lastBacklight < 1000)
+                {
+                    const float light = std::pow (juce::jlimit (0, 1000, lastBacklight) / 1000.0f, 0.6f);
+                    g.setColour (juce::Colours::black.withAlpha (1.0f - light));
+                    g.fillRect (area);
+                }
             }
         }
 

@@ -33,6 +33,8 @@ namespace kickemu
         int wheelStepsPerNotch = 1;
 
         std::atomic<bool> shiftHeld { false };   // MCU-local SHIFT state, set by the SHIFT key
+        /** Panel backlight as the guest drives it (PWM1 duty, 0..1000); nullptr = always full. */
+        const std::atomic<int>* backlightPermille = nullptr;
         juce::Image noise;                       // shared noise tile
 
         /** Called when a control wants to show a status hint (e.g. key + id). */

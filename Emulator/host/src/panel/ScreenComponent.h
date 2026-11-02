@@ -40,6 +40,7 @@ namespace kickemu
         SharedFramebuffer& fb;
         QmpClient& qmp;
         juce::uint32 lastSerial = 0;
+        int lastBacklight = 1000;
         bool lastConnected = false;
         juce::String status;
         juce::Image glare;

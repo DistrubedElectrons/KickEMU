@@ -76,6 +76,7 @@ namespace kickemu
 
         panelContext = std::make_unique<PanelContext> (theme, session.panel, session.mcu.protocol(), config);
         panelContext->onHint = [this] (const juce::String& text) { showHint (text); };
+        panelContext->backlightPermille = &session.backlightPermille;
         device = std::make_unique<DeviceView> (*panelContext, layout, session.framebuffer, session.qmp, session.io);
         sidePanel = std::make_unique<SidePanel> (session, settings, theme, device->describeKeyboard());
 
@@ -628,6 +629,8 @@ namespace kickemu
         }
 
         static int counter = 0;
+        if (counter % 15 == 0)
+            session.pollBacklight();
         if (++counter % 6 == 0)
         {
             updateStatus();
